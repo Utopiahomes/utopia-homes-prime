@@ -20,17 +20,26 @@ What this repo actually is today: an independently deployed Homes provider that 
 useful and legitimate for exactly one purpose: proving the protocol boundary. It is not, and must
 not be represented as, a conformant `guest.answer@1.0` provider.
 
-- **Label**: preconformant. Every deployment of this stage must say so wherever it's described —
-  README, deploy configs, internal comms. `deploy/render/utopia-homes-guest-answer-provider.preview.yaml.example`
-  already names itself `-preview`; keep that discipline everywhere else too.
+- **Label**: preconformant, out of band only. Every deployment of this stage must say so wherever
+  it's described — README, deploy configs, internal comms —
+  and, on the wire, via the `X-Utopia-Preview-Mode: legacy-bridge` diagnostic response header
+  (`api.py`, applied on every response regardless of outcome). `deploy/render/utopia-homes-
+  guest-answer-provider.preview.yaml.example` already names itself `-preview`; keep that
+  discipline everywhere else too. This status must **never** go in the customer-visible
+  `limitations[]` field — RC2 §12.2 explicitly prohibits limitations from revealing internal
+  provider, prompt, policy, security, or infrastructure details, and an earlier version of this
+  provider violated exactly that rule (caught in Control-side review; see
+  `legacy_bridge.py`'s `build_limitations()` for the corrected, customer-relevant-only content).
+  The diagnostic header must never be forwarded into a public widget or analytics — the website
+  consumer's own code only reads the response body, never its headers, and should stay that way.
 - **Traffic**: synthetic and staff-only only. Never public guest traffic. Never advertise
   `guest.answer@1.0` conformance while this stage is live, in any form — a status page, a
-  changelog, a stakeholder update, or a response header/field, should any of RC2's optional
-  extension points ever tempt one.
+  changelog, a stakeholder update, or a response field, should any of RC2's optional extension
+  points ever tempt one.
 - **What Stage 1 proves** (and only this): authentication (stoin-business-jwt-v1, environment/
   capability binding, jti replay), schema validation, the idempotency five-branch table, consumer
   retry behavior, failure-mode error codes, process separation from Stoin Control, and
-  website-consumer wire compatibility. All of this is already demonstrated locally — 191 tests,
+  website-consumer wire compatibility. All of this is already demonstrated locally — 193 tests,
   including a real two-process network proof (README.md "Verification") — and is what a synthetic/
   staff-only preview deployment would additionally prove under real network conditions.
 - **What Stage 1 explicitly does not and cannot prove**: anything in RC2 §§13-18 (grounding,

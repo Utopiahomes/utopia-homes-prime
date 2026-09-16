@@ -1,9 +1,12 @@
 """Maps between RC2's guest.answer@1.0 shape and the legacy FAQ-snapshot upstream's flatter shape.
 
 This is a PRECONFORMANT compatibility stage, not the conformant Homes Prime provider — see
-docs/guest-answer-preview-rollout.md. Every successful response carries a fixed limitations[]
-entry disclosing that status on the wire itself (build_limitations() below); this is not
-optional and must never be dropped.
+docs/guest-answer-preview-rollout.md. That status is disclosed out of band, via
+api.py's `X-Utopia-Preview-Mode` response header, NOT via `limitations[]`: RC2 §12.2 requires
+limitations to stay customer-relevant and explicitly prohibits revealing internal provider,
+prompt, policy, security, or infrastructure details, and naming the legacy delegation there
+would violate exactly that (caught in Control-side review — an earlier version of this file put
+it there; don't reintroduce it).
 
 Every mapping decision here is a genuine ambiguity RC2 leaves open by design — it specifies the
 wire contract, not how a strangler-mode provider must source its answers. Each is logged in
@@ -26,17 +29,10 @@ from guest_answer_provider.patterns import ANSWER_TEXT_MAX, ANSWER_TEXT_MIN
 LEGACY_QUESTION_MIN = 2
 LEGACY_QUESTION_MAX = 500
 
-_PRECONFORMANT_LIMITATION = (
-    "This response comes from a preconformant compatibility stage that delegates to a legacy FAQ "
-    "lookup; it does not yet satisfy guest.answer@1.0's grounding and knowledge requirements "
-    "(RC2 §§13-18)."
-)
 _SOURCE_LIMITATION = (
     "This answer is generated from a static FAQ reference and does not cite a specific source page."
 )
 _HISTORY_IGNORED_LIMITATION = "This answer does not take earlier conversation turns into account."
-
-assert len(_PRECONFORMANT_LIMITATION) <= 240  # RC2 common.defs.json limitationText bound
 
 
 def content_to_legacy_question(content: str) -> str | None:
@@ -48,12 +44,9 @@ def content_to_legacy_question(content: str) -> str | None:
 
 
 def build_limitations(*, history_present: bool) -> list[str]:
-    """Every response from this preconformant stage carries a fixed limitation disclosing that
-    status on the wire itself, per the Control-side correction recorded in
-    docs/guest-answer-preview-rollout.md — this must never be silently dropped or made
-    conditional, since doing so would let a caller receive an answer with no signal that it
-    didn't come from a conformant provider."""
-    limitations = [_PRECONFORMANT_LIMITATION, _SOURCE_LIMITATION]
+    """Only customer-relevant limitations belong here — see the module docstring for why
+    preconformant/provider status is carried elsewhere instead."""
+    limitations = [_SOURCE_LIMITATION]
     if history_present:
         limitations.append(_HISTORY_IGNORED_LIMITATION)
     return limitations

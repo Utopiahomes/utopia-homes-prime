@@ -56,6 +56,16 @@ from guest_answer_provider.models import ErrorBodyV1, ErrorResponseV1, GuestAnsw
 
 _ERROR_CLASS_BY_CODE = {cls.code: cls for cls in ERROR_CLASSES}
 
+PREVIEW_MODE_HEADER_NAME = "X-Utopia-Preview-Mode"
+PREVIEW_MODE_HEADER_VALUE = "legacy-bridge"
+"""Diagnostic-only, out-of-band signal that this service is the preconformant compatibility stage
+(delegates to the legacy FAQ engine) — see docs/guest-answer-preview-rollout.md. Deliberately NOT
+part of RC2's wire contract and never referenced by schema_validation.py: RC2 §12.2 requires
+`limitations[]` to stay customer-relevant and prohibits it from revealing internal provider,
+prompt, policy, security, or infrastructure details, so this status is carried here instead, on
+every response regardless of outcome (see the timing middleware below). Consumers must not read
+this header into anything customer-facing or into analytics."""
+
 
 class _DuplicateMemberError(ValueError):
     pass
@@ -227,6 +237,9 @@ def create_app(*, config: Config) -> FastAPI:
         started = time.perf_counter()
         response = await call_next(request)
         request.state.latency_ms = (time.perf_counter() - started) * 1000
+        # Applied centrally, to every response regardless of outcome or future new routes, so the
+        # preconformant signal can never be forgotten on one code path while present on another.
+        response.headers[PREVIEW_MODE_HEADER_NAME] = PREVIEW_MODE_HEADER_VALUE
         return response
 
     @app.exception_handler(GuestAnswerError)

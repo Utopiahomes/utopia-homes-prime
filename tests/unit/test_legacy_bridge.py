@@ -62,8 +62,10 @@ async def test_answer_via_legacy_success():
             client=client,
         )
         assert answer == "The check-in time is 4pm."
-        assert len(limitations) == 2
-        assert "preconformant" in limitations[0]
+        assert len(limitations) == 1
+        # RC2 Section 12.2: limitations must never reveal internal provider/infrastructure detail.
+        for forbidden in ("preconformant", "legacy", "Cloud Lucy", "cloud-hermes", "RC2"):
+            assert forbidden not in limitations[0]
 
 
 async def test_answer_via_legacy_includes_history_limitation_when_history_present():
@@ -75,7 +77,7 @@ async def test_answer_via_legacy_includes_history_limitation_when_history_presen
             config=CONFIG,
             client=client,
         )
-        assert len(limitations) == 3
+        assert len(limitations) == 2
 
 
 async def test_content_too_long_for_legacy_raises_answer_validation_failed():

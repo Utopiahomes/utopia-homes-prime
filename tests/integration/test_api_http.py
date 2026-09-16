@@ -20,6 +20,43 @@ def test_happy_path_schema_valid_response(client, valid_headers, valid_body, fak
     schema_validation.validate_response(response.json())
 
 
+def test_customer_visible_limitations_never_reveal_provider_detail(
+    client, valid_headers, valid_body, fake_upstream
+):
+    """RC2 Section 12.2: limitations must stay customer-relevant and must not reveal internal
+    provider, prompt, policy, security, or infrastructure details. Preconformant status belongs
+    only in the out-of-band X-Utopia-Preview-Mode header, never in the response body."""
+    response = client.post("/business/v1/guest/answer", json=valid_body, headers=valid_headers)
+    assert response.status_code == 200
+    limitations = response.json()["limitations"]
+    for limitation in limitations:
+        for forbidden in (
+            "preconformant",
+            "legacy",
+            "Cloud Lucy",
+            "cloud-hermes",
+            "provider",
+            "RC2",
+        ):
+            assert forbidden not in limitation, (
+                f"{forbidden!r} leaked into a customer-visible limitation"
+            )
+
+
+def test_preview_mode_header_present_on_success_and_error(
+    client, valid_headers, valid_body, fake_upstream
+):
+    """The diagnostic X-Utopia-Preview-Mode header is applied centrally (timing middleware) so it
+    can never be forgotten on one response path while present on another."""
+    ok = client.post("/business/v1/guest/answer", json=valid_body, headers=valid_headers)
+    assert ok.headers["X-Utopia-Preview-Mode"] == "legacy-bridge"
+
+    bad_headers = dict(valid_headers)
+    del bad_headers["X-Request-ID"]
+    err = client.post("/business/v1/guest/answer", json=valid_body, headers=bad_headers)
+    assert err.headers["X-Utopia-Preview-Mode"] == "legacy-bridge"
+
+
 def test_release_headers_present_on_success(client, valid_headers, valid_body, fake_upstream):
     """headers.003 (release_id format) + exchange.005 (both present on success)."""
     response = client.post("/business/v1/guest/answer", json=valid_body, headers=valid_headers)

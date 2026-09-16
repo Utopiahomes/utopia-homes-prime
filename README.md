@@ -19,6 +19,13 @@ into this service and replacing the legacy delegation with a private, provider-n
 Model Execution call — see `docs/guest-answer-preview-rollout.md` for the full two-stage plan and
 why the stages are distinct, not sequential phases of the same claim.
 
+Preconformant status is signaled out of band only — every response carries an
+`X-Utopia-Preview-Mode: legacy-bridge` diagnostic header (`api.py`), applied centrally so it can't
+be missed on any response path. It is never in the customer-visible `limitations[]` field: RC2
+§12.2 requires limitations to stay customer-relevant and explicitly prohibits revealing internal
+provider, prompt, policy, security, or infrastructure details there — an earlier version of this
+provider put it there, which was a real conformance bug, caught in Control-side review.
+
 **Status: local conformance evidence only, not deployed.** This repo delivers source, tests, a
 Dockerfile, and a review-only Render Blueprint example — nothing here has been deployed, and no
 production credentials exist. See `docs/stoin-utopia-business-contract-guest-answer-rc2.md` for
