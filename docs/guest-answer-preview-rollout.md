@@ -1,65 +1,83 @@
-# Proposed isolated-preview rollout (not executed)
+# Proposed rollout — preconformant preview now, conformant provider later (not executed)
 
 This is a plan, not a completed action. Nothing described here has been deployed, and this
-document does not authorize deployment — it exists so the next, separately-approved step has a
-concrete sequence to follow, per RC2 §20.2's staged strangler pattern:
+document does not authorize deployment.
 
-> Step 2: wrap the accepted current behavior behind the new contract, retaining existing
-> production behavior. Step 3: run an explicitly preconformant compatibility preview using
-> synthetic and staff-only traffic — it must not advertise conformance or receive public guest
-> traffic while carrying forward behavior that does not yet satisfy §§13-18.
+**Correction from Control-side review (2026-09-16, relayed via Lyra), recorded verbatim in
+substance because it changes what this repo is allowed to claim:** wrapping the existing
+`cloud-hermes-lucy` legacy answer endpoint is acceptable **only** as RC2 §20.2's explicitly
+preconformant compatibility stage. It cannot become the final Homes Prime provider, because that
+would preserve the exact production coupling this whole effort exists to remove — guest answering
+would still depend on Cloud Lucy / Control-owned runtime behavior. The two stages below are
+therefore distinct, not sequential phases of the same claim, and only the second is eligible for
+full conformance and Tier B evaluation.
 
-This repo delivers step 2 (the wrapper) with local conformance evidence (191 tests, including a
-real two-process network proof — see README.md "Verification"). What follows is the proposed
-sequence for step 3.
+## Stage 1 — preconformant compatibility preview (this repo, current state)
 
-## 1. Provision a preview-only environment
+What this repo actually is today: an independently deployed Homes provider that exposes the RC2
+`guest.answer@1.0` wire protocol and **temporarily delegates the actual answer to the legacy
+`cloud-hermes-lucy` FAQ-snapshot engine** (`legacy_upstream.py`/`legacy_bridge.py`). This is
+useful and legitimate for exactly one purpose: proving the protocol boundary. It is not, and must
+not be represented as, a conformant `guest.answer@1.0` provider.
 
-- Deploy this provider using `deploy/render/utopia-homes-guest-answer-provider.preview.yaml.example`
-  (renamed to `render.yaml`), with `GUEST_ANSWER_PROVIDER_ENVIRONMENT=preview` and a JWT key
-  allowlist containing **only** `environment: "preview"` keys — never a production key, so
-  auth.024/025's environment-binding rejection is a second, redundant layer of protection on top
-  of the operational discipline of not issuing one.
-- Point `LUCY_PUBLIC_API_URL` at the real legacy upstream (read-only FAQ lookup, no guest-specific
-  state, safe to share with a preview deployment) or a dedicated preview-only mirror if the
-  operator prefers full isolation.
-- Deploy the website-consumer preview route (see `utopia-homes-web`'s
-  `claude/guest-answer-preview` branch, `app/api/lucy-preview/route.ts`) to a preview/staging
-  environment of the website, with `PREVIEW_GUEST_ANSWER_PROVIDER_URL` pointing at the provider
-  deployed above and a matching preview-environment JWT keypair.
+- **Label**: preconformant. Every deployment of this stage must say so wherever it's described —
+  README, deploy configs, internal comms. `deploy/render/utopia-homes-guest-answer-provider.preview.yaml.example`
+  already names itself `-preview`; keep that discipline everywhere else too.
+- **Traffic**: synthetic and staff-only only. Never public guest traffic. Never advertise
+  `guest.answer@1.0` conformance while this stage is live, in any form — a status page, a
+  changelog, a stakeholder update, or a response header/field, should any of RC2's optional
+  extension points ever tempt one.
+- **What Stage 1 proves** (and only this): authentication (stoin-business-jwt-v1, environment/
+  capability binding, jti replay), schema validation, the idempotency five-branch table, consumer
+  retry behavior, failure-mode error codes, process separation from Stoin Control, and
+  website-consumer wire compatibility. All of this is already demonstrated locally — 191 tests,
+  including a real two-process network proof (README.md "Verification") — and is what a synthetic/
+  staff-only preview deployment would additionally prove under real network conditions.
+- **What Stage 1 explicitly does not and cannot prove**: anything in RC2 §§13-18 (grounding,
+  precedence, model/knowledge requirements). The legacy engine has no Homes-owned prompts,
+  approved-knowledge grounding, or answer policy behind it — it's a static FAQ lookup — so no
+  amount of traffic against this stage moves the needle on semantic quality. Don't collect staff
+  feedback here expecting it to double as Tier B signal; it can't.
 
-## 2. Synthetic traffic first
+Provision and traffic sequence for Stage 1 (still not executed — proposed only):
 
-- Before any staff-only traffic, run a scripted synthetic suite against the live preview
-  deployment: replay a representative sample of the vendored Tier A vectors as real HTTP requests
-  (the pattern `tests/contract/test_live.py` already establishes locally, pointed at the preview
-  URL instead of a spawned local subprocess).
-- Confirm: schema-valid responses, correct release headers, idempotency behavior holds under
-  real network latency (not just the fast local fake upstream), and the `answer_validation_failed`
-  non-retry rule holds against the real legacy upstream's real response shapes.
+1. Deploy using `deploy/render/utopia-homes-guest-answer-provider.preview.yaml.example` (renamed
+   to `render.yaml`), `GUEST_ANSWER_PROVIDER_ENVIRONMENT=preview`, and a JWT key allowlist
+   containing only `environment: "preview"` keys — never a production key.
+2. Deploy the website-consumer preview route (`utopia-homes-web`'s `claude/guest-answer-preview`
+   branch, `app/api/lucy-preview/route.ts`) to a preview/staging environment, pointed at the
+   provider above.
+3. Synthetic traffic first: replay a representative sample of the vendored Tier A vectors as real
+   HTTP requests against the live deployment (the pattern `tests/contract/test_live.py` already
+   establishes locally). Confirm schema-valid responses, correct release headers, and idempotency
+   behavior under real network latency, not just the local fake upstream.
+4. Staff-only traffic only after synthetic traffic passes, gated at least as strictly as the
+   existing `/api/lucy` route's same-origin/session mechanism — ideally an explicit staff-session
+   claim, since this route has no guest-facing UI wired to it at all yet.
 
-## 3. Staff-only traffic
+## Stage 2 — the conformant Homes Prime provider (not started)
 
-- Once synthetic traffic passes, open the preview website route to staff only (existing
-  same-origin + session-cookie mechanisms in `utopia-homes-web` already gate `/api/lucy`; the
-  preview route should get an equivalent or stricter gate — e.g. an internal-only header or an
-  allowlisted staff session claim — before any human traffic reaches it).
-- Collect real interaction data: does the legacy FAQ-snapshot engine's answers, wrapped in RC2's
-  richer envelope (session/turn tracking, idempotency, structured errors), actually serve staff
-  well? This is where the gap between "protocol-conformant" (what this repo proves) and
-  "semantically good" (Tier B) becomes visible.
+Stage 2 is a different architecture, not an extension of Stage 1's traffic ramp. It requires:
 
-## 4. Tier B — semantic and grounding evaluation
+1. Relocate Homes-owned prompts, approved knowledge, answer policy, and validation logic into
+   this provider (or its successor), replacing `legacy_bridge.py`'s delegation entirely.
+2. Replace the legacy HTTP call with a **private, provider-neutral Shared Model Execution call**
+   — the exact interface/contract for this does not exist yet in this repo and has not been
+   specified to this implementation; it is Control/Homes-side design work, not something inferred
+   here. Stoin Control must remain absent from the guest request path regardless of how this is
+   implemented.
+3. Only once both of the above are real can this provider enter the full RC2 conformance preview
+   and Tier B (semantic/grounding) evaluation. Nothing in Stage 1 — no amount of staff traffic
+   against the legacy-wrapped path — substitutes for this.
 
-- RC2 §§13-18 (grounding, precedence, model requirements) are explicitly **not** satisfied by this
-  strangler-step wrapper, and Tier A's own scope excludes them by design (the same boundary RC3's
-  Management Contract bundle drew around evidentiary/content requirements). Tier B evaluation —
-  does the answer actually ground correctly, cite real sources, handle out-of-scope questions —
-  requires a runnable candidate with real traffic data, which steps 1-3 above produce. This
-  provider is explicitly not advertised as passing Tier B; that's the next phase, not this one.
-
-## 5. Only after 1-4: consider production
-
-Nothing above authorizes swapping the live `/api/lucy` route's traffic, generating production
-credentials, or announcing conformance. Each of those is a separate, explicit decision for a
-later task once steps 1-4 have actually run and been reviewed.
+**A note on recoverable prior work relevant to Stage 2**: a separate, orphaned git worktree at
+`utopia-homes-web-claude` (unusable via git in this environment — its `.git` metadata points at a
+different session's filesystem path — but still readable on disk) contains a real, business-
+owner-approved candidate knowledge corpus: `content/lucy-public-knowledge.r1.approved.json` (25
+entries, schema `lucy-public-knowledge-v1`, SHA-256-pinned, approved by Ray DeLuca per
+`docs/public-lucy-r1-corpus-approval.md` dated 2026-09-12), plus supporting code
+(`lib/lucy/knowledge.ts`, `lib/lucy/page-context.ts`) and tests. Its own approval note is explicit
+that the scope is **R1 testing only** — it does not authorize production publication, deployment,
+provider use, or a future corpus with a different digest. This is flagged here as a pointer for
+whoever scopes Stage 2, not as material already folded into this repo; using it for anything
+beyond its stated R1-testing scope needs its own, separate authorization.

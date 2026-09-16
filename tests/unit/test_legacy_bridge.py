@@ -62,7 +62,8 @@ async def test_answer_via_legacy_success():
             client=client,
         )
         assert answer == "The check-in time is 4pm."
-        assert len(limitations) == 1
+        assert len(limitations) == 2
+        assert "preconformant" in limitations[0]
 
 
 async def test_answer_via_legacy_includes_history_limitation_when_history_present():
@@ -74,7 +75,7 @@ async def test_answer_via_legacy_includes_history_limitation_when_history_presen
             config=CONFIG,
             client=client,
         )
-        assert len(limitations) == 2
+        assert len(limitations) == 3
 
 
 async def test_content_too_long_for_legacy_raises_answer_validation_failed():

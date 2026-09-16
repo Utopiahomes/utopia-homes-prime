@@ -1,13 +1,23 @@
 # Utopia Homes guest.answer Provider
 
-The Homes Prime provider for **Business Contract `guest.answer@1.0`** (RC2, frozen commit
-`daf99943abf177f2209a6efb00e03c087bc542c6`), built against the frozen Tier A conformance bundle
-(digest `sha256:50492b998b393a25322cb9b76e4a8fbd7199905b8457450b8aa48ae00149ad4c`, 250 checks / 218
-files, no remaining acknowledged gaps). It exposes one authenticated HTTP resource —
+An independently deployed Homes provider for **Business Contract `guest.answer@1.0`** (RC2, frozen
+commit `daf99943abf177f2209a6efb00e03c087bc542c6`), built against the frozen Tier A conformance
+bundle (digest `sha256:50492b998b393a25322cb9b76e4a8fbd7199905b8457450b8aa48ae00149ad4c`, 250
+checks / 218 files, no remaining acknowledged gaps). It exposes one authenticated HTTP resource —
 `POST /business/v1/guest/answer` — implementing the full RC2 protocol (EdDSA auth, idempotency,
 RFC 8785 canonicalization, the 13-row error contract) around the **existing, already-working**
 legacy FAQ-snapshot answer engine `utopia-homes-web` already calls — RC2 §20.2's strangler step 2:
 wrap the accepted current behavior, don't rebuild it.
+
+**Conformance status: preconformant compatibility stage only — not the conformant Homes Prime
+provider, and not eligible to enter Tier B evaluation as-is.** Wrapping the legacy answer engine
+proves the protocol boundary (auth, schemas, idempotency, retries, failure behavior, process
+separation, consumer compatibility); it cannot prove RC2 §§13-18 (grounding, precedence, model/
+knowledge requirements), because the legacy engine has no Homes-owned prompts, approved-knowledge
+grounding, or answer policy behind it. Becoming the conformant provider requires relocating those
+into this service and replacing the legacy delegation with a private, provider-neutral Shared
+Model Execution call — see `docs/guest-answer-preview-rollout.md` for the full two-stage plan and
+why the stages are distinct, not sequential phases of the same claim.
 
 **Status: local conformance evidence only, not deployed.** This repo delivers source, tests, a
 Dockerfile, and a review-only Render Blueprint example — nothing here has been deployed, and no

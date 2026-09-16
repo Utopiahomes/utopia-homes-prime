@@ -9,6 +9,14 @@ None of these are blocking — they're flagged the same way the Management Contr
 
 ## Strangler-step answer sourcing (legacy_bridge.py)
 
+**This is a preconformant compatibility stage, not the conformant Homes Prime provider** —
+correction from Control-side review, see `docs/guest-answer-preview-rollout.md` for the full
+two-stage plan. Wrapping the legacy engine proves the RC2 protocol boundary; it cannot prove
+§§13-18, and it must not be represented as satisfying `guest.answer@1.0` conformance. The judgment
+calls below are scoped to making the *wrapper* behave sensibly, not to defending the wrapper as a
+permanent architecture — that dependency on `cloud-hermes-lucy` / Control-owned runtime behavior
+is exactly the coupling the conformant provider is required to remove.
+
 The provider's only answer engine right now is the existing, already-working legacy FAQ-snapshot
 lookup `utopia-homes-web` already calls (`lib/lucy/server.ts`'s `askPublicLucy`) — per RC2 §20.2's
 strangler pattern, step 2 wraps the *accepted current behavior*, it doesn't invent a new one.
