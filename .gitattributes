@@ -1,0 +1,10 @@
+# This repo is developed cross-platform; pin LF for source so diffs and hashes stay stable.
+# The vendored bundle under contracts/ ships its own stricter .gitattributes and is untouched.
+* text=auto eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+Dockerfile text eol=lf

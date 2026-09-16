@@ -1,0 +1,56 @@
+# Review-only Render Blueprint fragment for an ISOLATED PREVIEW deployment only — RC2 §20.2 step
+# 3: "an explicitly preconformant compatibility preview using synthetic and staff-only traffic,"
+# never public guest traffic. Not applied automatically by anything in this repo. Provisioning,
+# deployment, and credential issuance remain explicit, separate, human-approved steps — see
+# docs/guest-answer-preview-rollout.md for the full proposed (not executed) sequence this fragment
+# is step 2 of.
+#
+# Rename to render.yaml and fill in the placeholders only when a preview deployment is separately
+# authorized. This fragment deliberately has no production variant: a genuine production shape
+# (private networking, real JWT keys, monitoring, Tier B grounding evaluation) is out of scope
+# until real traffic has actually flowed through an isolated preview first.
+
+services:
+  - type: web
+    name: utopia-homes-guest-answer-provider-preview
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    region: oregon
+    numInstances: 1
+    healthCheckPath: /healthz
+    autoDeployTrigger: "off"
+    envVars:
+      - key: GUEST_ANSWER_PROVIDER_ENVIRONMENT
+        value: preview
+      # JSON array of {kid, public_key_pem, environment, issuer, subject, audience, capabilities,
+      # status}. Provisioned out-of-band per RC2 §7; never committed to source control. Every key
+      # here must have environment="preview" — a production key must never be usable against this
+      # deployment (auth.024/025's environment-binding rejection is what enforces that at runtime,
+      # but the operational discipline of never issuing a production key for a preview URL is what
+      # actually prevents it).
+      - key: GUEST_ANSWER_PROVIDER_JWT_PUBLIC_KEYS_JSON
+        sync: false
+      - key: GUEST_ANSWER_PROVIDER_BUSINESS_RELEASE_ID
+        sync: false
+      - key: GUEST_ANSWER_PROVIDER_KNOWLEDGE_RELEASE_ID
+        sync: false
+      - key: GUEST_ANSWER_PROVIDER_RATE_LIMIT_PER_MINUTE
+        value: "120"
+      - key: GUEST_ANSWER_PROVIDER_LOG_LEVEL
+        value: INFO
+      # The SAME legacy upstream utopia-homes-web's production /api/lucy route already calls.
+      # Pointing a preview provider at the real legacy upstream is acceptable (it's read-only FAQ
+      # lookup with no guest-specific state) but keep LUCY_PUBLIC_SITE_HOSTNAME distinct from the
+      # real site hostname if the upstream ever starts doing hostname-based access control.
+      - key: LUCY_PUBLIC_ENABLED
+        value: "true"
+      - key: LUCY_PUBLIC_API_URL
+        sync: false
+      - key: LUCY_PUBLIC_API_TOKEN
+        sync: false
+      - key: LUCY_PUBLIC_SITE_HOSTNAME
+        sync: false
+      - key: LUCY_PUBLIC_SNAPSHOT_DIGEST
+        sync: false

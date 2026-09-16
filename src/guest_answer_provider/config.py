@@ -1,0 +1,278 @@
+"""Environment-derived startup configuration. Fails closed: any malformed value raises
+`ConfigError` rather than falling back to a default that could silently misconfigure auth,
+idempotency, or the legacy upstream call.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Final, Literal
+
+_ENV_PREFIX = "GUEST_ANSWER_PROVIDER_"
+
+Environment = Literal["production", "preview"]
+KeyStatus = Literal["active", "retired", "revoked"]
+
+MINIMUM_RATE_LIMIT_PER_MINUTE: Final = 12
+DEFAULT_IDEMPOTENCY_TTL_SECONDS: Final = 900
+"""15 minutes. Architectural in RC2 (not pinned) — see docs/implementation-notes.md."""
+DEFAULT_IDEMPOTENCY_IN_PROGRESS_CEILING_SECONDS: Final = 15
+"""Legacy upstream timeout (10s) plus grace, before a stuck in_progress record is treated as
+unresolved (covers a process crash mid-request)."""
+
+
+class ConfigError(ValueError):
+    """Raised when startup configuration is missing or malformed. Callers must fail closed."""
+
+
+@dataclass(frozen=True, slots=True)
+class JwtAllowlistedKey:
+    """RC2 §7: per-key local binding of iss/sub/aud/env/capabilities — there is no global
+    expected-claim set, each key carries its own."""
+
+    kid: str
+    public_key_pem: str
+    environment: Environment
+    issuer: str
+    subject: str
+    audience: str
+    capabilities: tuple[str, ...]
+    status: KeyStatus = "active"
+
+
+_SITE_HOSTNAME_RE = re.compile(
+    r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+)
+"""Ported verbatim from utopia-homes-web/lib/lucy/server.ts's siteHostname pattern."""
+
+
+@dataclass(frozen=True, slots=True)
+class LegacyUpstreamConfig:
+    """Mirrors utopia-homes-web/lib/lucy/server.ts's resolvePublicLucyConfiguration() exactly —
+    same env var names, same validation (including the loopback-only-outside-production HTTP
+    exception) — so this provider calls the identical upstream the website already calls, with no
+    new upstream config surface."""
+
+    endpoint: str
+    token: str
+    site_hostname: str
+    snapshot_digest: str
+
+    @classmethod
+    def from_environment(
+        cls, env: Mapping[str, str], *, provider_environment: str = "preview"
+    ) -> LegacyUpstreamConfig:
+        from urllib.parse import urlsplit
+
+        if env.get("LUCY_PUBLIC_ENABLED") != "true":
+            raise ConfigError("LUCY_PUBLIC_ENABLED must be 'true'")
+
+        endpoint = (env.get("LUCY_PUBLIC_API_URL") or "").strip()
+        token = (env.get("LUCY_PUBLIC_API_TOKEN") or "").strip()
+        site_hostname = (env.get("LUCY_PUBLIC_SITE_HOSTNAME") or "").strip().lower()
+        snapshot_digest = (env.get("LUCY_PUBLIC_SNAPSHOT_DIGEST") or "").strip()
+
+        if not endpoint or not token or len(token) < 32 or not site_hostname or not snapshot_digest:
+            raise ConfigError(
+                "LUCY_PUBLIC_API_URL / LUCY_PUBLIC_API_TOKEN (>=32 chars) / "
+                "LUCY_PUBLIC_SITE_HOSTNAME / LUCY_PUBLIC_SNAPSHOT_DIGEST are all required"
+            )
+        if not re.fullmatch(r"[a-f0-9]{64}", snapshot_digest):
+            raise ConfigError("LUCY_PUBLIC_SNAPSHOT_DIGEST must be 64 lowercase hex characters")
+
+        parsed = urlsplit(endpoint)
+        if not parsed.hostname:
+            raise ConfigError("LUCY_PUBLIC_API_URL is not a valid URL")
+        loopback = parsed.hostname in ("127.0.0.1", "localhost")
+        if parsed.scheme != "https" and not (provider_environment != "production" and loopback):
+            raise ConfigError(
+                "LUCY_PUBLIC_API_URL must be https:// (loopback http only outside production)"
+            )
+        if parsed.username or parsed.password:
+            raise ConfigError("LUCY_PUBLIC_API_URL must not contain userinfo")
+        if not _SITE_HOSTNAME_RE.fullmatch(site_hostname):
+            raise ConfigError("LUCY_PUBLIC_SITE_HOSTNAME is not a valid DNS hostname")
+
+        return cls(
+            endpoint=endpoint,
+            token=token,
+            site_hostname=site_hostname,
+            snapshot_digest=snapshot_digest,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class Config:
+    environment: Environment
+    port: int
+    jwt_keys: tuple[JwtAllowlistedKey, ...]
+    rate_limit_per_minute: int
+    log_level: str
+    idempotency_ttl_seconds: float
+    idempotency_in_progress_ceiling_seconds: float
+    legacy_upstream: LegacyUpstreamConfig
+    business_release_id: str
+    knowledge_release_id: str
+
+    @classmethod
+    def from_environment(cls, environment: Mapping[str, str] | None = None) -> Config:
+        env = environment if environment is not None else os.environ
+
+        def require(name: str) -> str:
+            value = env.get(f"{_ENV_PREFIX}{name}")
+            if value is None or value == "":
+                raise ConfigError(f"missing required environment variable {_ENV_PREFIX}{name}")
+            return value
+
+        def optional(name: str, default: str | None = None) -> str | None:
+            value = env.get(f"{_ENV_PREFIX}{name}")
+            return value if value not in (None, "") else default
+
+        try:
+            port = int(env.get("PORT", "8081"))
+        except ValueError as exc:
+            raise ConfigError("PORT must be an integer") from exc
+
+        provider_environment = optional("ENVIRONMENT", "preview") or "preview"
+        if provider_environment not in ("production", "preview"):
+            raise ConfigError(f"{_ENV_PREFIX}ENVIRONMENT must be 'production' or 'preview'")
+
+        jwt_keys = cls._parse_jwt_keys(require("JWT_PUBLIC_KEYS_JSON"))
+
+        rate_limit_raw = optional("RATE_LIMIT_PER_MINUTE", "120")
+        try:
+            rate_limit_per_minute = int(rate_limit_raw) if rate_limit_raw is not None else 120
+        except ValueError as exc:
+            raise ConfigError(f"{_ENV_PREFIX}RATE_LIMIT_PER_MINUTE must be an integer") from exc
+        if rate_limit_per_minute < MINIMUM_RATE_LIMIT_PER_MINUTE:
+            raise ConfigError(
+                f"{_ENV_PREFIX}RATE_LIMIT_PER_MINUTE must be at least "
+                f"{MINIMUM_RATE_LIMIT_PER_MINUTE}"
+            )
+
+        ttl_raw = optional("IDEMPOTENCY_TTL_SECONDS", str(DEFAULT_IDEMPOTENCY_TTL_SECONDS))
+        try:
+            idempotency_ttl_seconds = (
+                float(ttl_raw) if ttl_raw is not None else float(DEFAULT_IDEMPOTENCY_TTL_SECONDS)
+            )
+        except ValueError as exc:
+            raise ConfigError(f"{_ENV_PREFIX}IDEMPOTENCY_TTL_SECONDS must be a number") from exc
+        if idempotency_ttl_seconds <= 0:
+            raise ConfigError(f"{_ENV_PREFIX}IDEMPOTENCY_TTL_SECONDS must be positive")
+
+        ceiling_raw = optional(
+            "IDEMPOTENCY_IN_PROGRESS_CEILING_SECONDS",
+            str(DEFAULT_IDEMPOTENCY_IN_PROGRESS_CEILING_SECONDS),
+        )
+        try:
+            idempotency_in_progress_ceiling_seconds = (
+                float(ceiling_raw)
+                if ceiling_raw is not None
+                else float(DEFAULT_IDEMPOTENCY_IN_PROGRESS_CEILING_SECONDS)
+            )
+        except ValueError as exc:
+            raise ConfigError(
+                f"{_ENV_PREFIX}IDEMPOTENCY_IN_PROGRESS_CEILING_SECONDS must be a number"
+            ) from exc
+        if idempotency_in_progress_ceiling_seconds <= 0:
+            raise ConfigError(
+                f"{_ENV_PREFIX}IDEMPOTENCY_IN_PROGRESS_CEILING_SECONDS must be positive"
+            )
+
+        log_level = (optional("LOG_LEVEL", "INFO") or "INFO").upper()
+
+        legacy_upstream = LegacyUpstreamConfig.from_environment(
+            env, provider_environment=provider_environment
+        )
+
+        release_id_pattern = r"^[\x21-\x7e]{1,128}$"
+        business_release_id = require("BUSINESS_RELEASE_ID")
+        if not re.fullmatch(release_id_pattern, business_release_id):
+            raise ConfigError(
+                f"{_ENV_PREFIX}BUSINESS_RELEASE_ID does not match the required format"
+            )
+        knowledge_release_id = require("KNOWLEDGE_RELEASE_ID")
+        if not re.fullmatch(release_id_pattern, knowledge_release_id):
+            raise ConfigError(
+                f"{_ENV_PREFIX}KNOWLEDGE_RELEASE_ID does not match the required format"
+            )
+
+        return cls(
+            environment=provider_environment,  # type: ignore[arg-type]
+            port=port,
+            jwt_keys=jwt_keys,
+            rate_limit_per_minute=rate_limit_per_minute,
+            log_level=log_level,
+            idempotency_ttl_seconds=idempotency_ttl_seconds,
+            idempotency_in_progress_ceiling_seconds=idempotency_in_progress_ceiling_seconds,
+            legacy_upstream=legacy_upstream,
+            business_release_id=business_release_id,
+            knowledge_release_id=knowledge_release_id,
+        )
+
+    @staticmethod
+    def _parse_jwt_keys(raw: str) -> tuple[JwtAllowlistedKey, ...]:
+        try:
+            entries = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ConfigError(f"{_ENV_PREFIX}JWT_PUBLIC_KEYS_JSON is not valid JSON") from exc
+        if not isinstance(entries, list) or not entries:
+            raise ConfigError(f"{_ENV_PREFIX}JWT_PUBLIC_KEYS_JSON must be a non-empty JSON array")
+
+        seen_kids: set[str] = set()
+        keys: list[JwtAllowlistedKey] = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                raise ConfigError(f"{_ENV_PREFIX}JWT_PUBLIC_KEYS_JSON entries must be objects")
+
+            kid = entry.get("kid")
+            public_key_pem = entry.get("public_key_pem")
+            key_environment = entry.get("environment")
+            issuer = entry.get("issuer")
+            subject = entry.get("subject")
+            audience = entry.get("audience")
+            capabilities = entry.get("capabilities")
+            status = entry.get("status", "active")
+
+            if not isinstance(kid, str) or not kid:
+                raise ConfigError("invalid kid in JWT_PUBLIC_KEYS_JSON")
+            if kid in seen_kids:
+                raise ConfigError(f"duplicate kid {kid!r} in JWT_PUBLIC_KEYS_JSON")
+            seen_kids.add(kid)
+
+            if not isinstance(public_key_pem, str) or "BEGIN PUBLIC KEY" not in public_key_pem:
+                raise ConfigError(f"invalid public_key_pem for kid {kid!r}")
+            if key_environment not in ("production", "preview"):
+                raise ConfigError(f"invalid environment for kid {kid!r}")
+            if not isinstance(issuer, str) or not issuer:
+                raise ConfigError(f"invalid issuer for kid {kid!r}")
+            if not isinstance(subject, str) or not subject:
+                raise ConfigError(f"invalid subject for kid {kid!r}")
+            if not isinstance(audience, str) or not audience:
+                raise ConfigError(f"invalid audience for kid {kid!r}")
+            if (
+                not isinstance(capabilities, list)
+                or not capabilities
+                or not all(isinstance(c, str) and c for c in capabilities)
+            ):
+                raise ConfigError(f"invalid capabilities for kid {kid!r}")
+            if status not in ("active", "retired", "revoked"):
+                raise ConfigError(f"invalid status for kid {kid!r}")
+
+            keys.append(
+                JwtAllowlistedKey(
+                    kid=kid,
+                    public_key_pem=public_key_pem,
+                    environment=key_environment,
+                    issuer=issuer,
+                    subject=subject,
+                    audience=audience,
+                    capabilities=tuple(capabilities),
+                    status=status,
+                )
+            )
+        return tuple(keys)
