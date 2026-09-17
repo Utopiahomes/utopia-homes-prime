@@ -9,12 +9,14 @@ complete the idempotency record.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import time
 from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
 
@@ -35,6 +37,7 @@ from guest_answer_provider.errors import (
     AnswerValidationFailedError,
     AuthenticationFailedError,
     CapabilityForbiddenError,
+    DeadlineExceededError,
     GuestAnswerError,
     IdempotencyConflictError,
     IdempotencyRecoveryUnavailableError,
@@ -45,14 +48,26 @@ from guest_answer_provider.errors import (
     ResponseInvalidatedError,
     TemporarilyUnavailableError,
 )
+from guest_answer_provider.homes_prime import (
+    GUEST_ATTEMPT_BUDGET_MS,
+    ExecutionProfileSettings,
+    HomesPrimeEngine,
+    HomesPrimeSettings,
+)
 from guest_answer_provider.idempotency import IdempotencyScopeKey, IdempotencyStore
 from guest_answer_provider.jti_replay import JtiReplayStore
+from guest_answer_provider.knowledge import KnowledgeProjection
 from guest_answer_provider.logging_utils import (
     access_log,
     digest_idempotency_key,
     digest_session_id,
 )
 from guest_answer_provider.models import ErrorBodyV1, ErrorResponseV1, GuestAnswerResponseV1
+from guest_answer_provider.sme_client import (
+    ExecutionIdentity,
+    SharedModelExecutionClient,
+    validate_endpoint_url,
+)
 
 _ERROR_CLASS_BY_CODE = {cls.code: cls for cls in ERROR_CLASSES}
 
@@ -65,6 +80,14 @@ part of RC2's wire contract and never referenced by schema_validation.py: RC2 §
 prompt, policy, security, or infrastructure details, so this status is carried here instead, on
 every response regardless of outcome (see the timing middleware below). Consumers must not read
 this header into anything customer-facing or into analytics."""
+
+HOMES_PRIME_PREVIEW_MODE_HEADER_VALUE = "homes-prime-candidate"
+"""Stage 2 candidate marker. The Homes Prime engine is implemented locally against Shared Model
+Execution RC1 but has no Tier B evidence, conformance acceptance, or activation approval, so it is
+flagged out of band exactly like the legacy bridge."""
+
+DEFAULT_RETRY_AFTER_SECONDS = 2
+"""RC2 §17: every retryable error carries an integer Retry-After of 1-30 seconds."""
 
 
 class _DuplicateMemberError(ValueError):
@@ -161,7 +184,9 @@ def _error_response(request: Request, exc: GuestAnswerError) -> JSONResponse:
     if valid_request_id is not None:
         headers["X-Request-ID"] = valid_request_id
     if exc.retry_after_seconds is not None:
-        headers["Retry-After"] = str(exc.retry_after_seconds)
+        headers["Retry-After"] = str(min(30, max(1, exc.retry_after_seconds)))
+    elif exc.retryable:
+        headers["Retry-After"] = str(DEFAULT_RETRY_AFTER_SECONDS)
 
     raw_idempotency_key = getattr(request.state, "idempotency_key", None)
     access_log(
@@ -209,8 +234,53 @@ def _success_response(
     return JSONResponse(status_code=200, content=body, headers=headers)
 
 
-def create_app(*, config: Config) -> FastAPI:
+def _load_homes_prime(config: Config) -> tuple[KnowledgeProjection, HomesPrimeSettings]:
+    """Startup-time, fail-closed assembly of the Stage 2 candidate's Homes-owned inputs."""
+    prime = config.homes_prime
+    assert prime is not None
+    settings = HomesPrimeSettings(
+        generate=ExecutionProfileSettings(
+            prime.generate.profile_id,
+            prime.generate.ceiling_ms,
+            prime.generate.max_output_tokens,
+            prime.generate.max_cost_microusd,
+        ),
+        review=ExecutionProfileSettings(
+            prime.review.profile_id,
+            prime.review.ceiling_ms,
+            prime.review.max_output_tokens,
+            prime.review.max_cost_microusd,
+        ),
+        transit_allowance_ms=prime.transit_allowance_ms,
+        prime_reserve_ms=prime.prime_reserve_ms,
+    )
+    validate_endpoint_url(prime.execution_url, allow_loopback_http=config.environment == "preview")
+    projection = KnowledgeProjection.load(
+        Path(prime.knowledge_path),
+        release_id=config.knowledge_release_id,
+        allowed_corpus_digests=prime.knowledge_allowed_digests,
+        withdrawn_ids=prime.knowledge_withdrawn_ids,
+        approved_hostnames=prime.approved_hostnames,
+    )
+    return projection, settings
+
+
+def create_app(
+    *,
+    config: Config,
+    execution_transport: httpx.AsyncBaseTransport | None = None,
+) -> FastAPI:
+    """`execution_transport` exists only so tests can route the private Shared Model Execution
+    client to an in-process fake; runtime wiring always uses the default network transport."""
     allowlist = KeyAllowlist(config.jwt_keys)
+    homes_prime_parts = (
+        _load_homes_prime(config) if config.answer_engine == "homes-prime" else None
+    )
+    preview_mode_value = (
+        HOMES_PRIME_PREVIEW_MODE_HEADER_VALUE
+        if config.answer_engine == "homes-prime"
+        else PREVIEW_MODE_HEADER_VALUE
+    )
     rate_limiter = _RateLimiter(config.rate_limit_per_minute)
     jti_replay_store = JtiReplayStore()
     idempotency_store = IdempotencyStore(
@@ -220,8 +290,37 @@ def create_app(*, config: Config) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        async with httpx.AsyncClient() as client:
-            app.state.legacy_client = client
+        if homes_prime_parts is None:
+            async with httpx.AsyncClient() as client:
+                app.state.legacy_client = client
+                app.state.homes_prime = None
+                yield
+            return
+
+        prime = config.homes_prime
+        assert prime is not None
+        projection, settings = homes_prime_parts
+        identity = ExecutionIdentity.from_pem(
+            kid=prime.execution_key_id,
+            issuer=prime.execution_issuer,
+            subject=prime.execution_subject,
+            private_key_pem=prime.execution_private_key_pem,
+        )
+        # trust_env=False: no ambient proxy or netrc configuration can intercept the private call.
+        async with httpx.AsyncClient(
+            transport=execution_transport, trust_env=False, follow_redirects=False
+        ) as execution_http:
+            app.state.legacy_client = None
+            app.state.homes_prime = HomesPrimeEngine(
+                settings=settings,
+                projection=projection,
+                client=SharedModelExecutionClient(
+                    endpoint_url=prime.execution_url,
+                    identity=identity,
+                    http=execution_http,
+                    transit_allowance_ms=settings.transit_allowance_ms,
+                ),
+            )
             yield
 
     app = FastAPI(
@@ -239,7 +338,7 @@ def create_app(*, config: Config) -> FastAPI:
         request.state.latency_ms = (time.perf_counter() - started) * 1000
         # Applied centrally, to every response regardless of outcome or future new routes, so the
         # preconformant signal can never be forgotten on one code path while present on another.
-        response.headers[PREVIEW_MODE_HEADER_NAME] = PREVIEW_MODE_HEADER_VALUE
+        response.headers[PREVIEW_MODE_HEADER_NAME] = preview_mode_value
         return response
 
     @app.exception_handler(GuestAnswerError)
@@ -324,10 +423,16 @@ def create_app(*, config: Config) -> FastAPI:
             environment=principal.environment,
             idempotency_key=preflight.idempotency_key,
         )
+        engine: HomesPrimeEngine | None = request.app.state.homes_prime
+        if engine is not None:
+            eligibility_token = engine.eligibility_token()
+        else:
+            assert config.legacy_upstream is not None
+            eligibility_token = config.legacy_upstream.snapshot_digest
         decision = await idempotency_store.decide_and_admit(
             scope_key,
             canonical_digest=digest,
-            current_snapshot_digest=config.legacy_upstream.snapshot_digest,
+            current_snapshot_digest=eligibility_token,
         )
 
         if decision == "idempotency_conflict":
@@ -352,6 +457,18 @@ def create_app(*, config: Config) -> FastAPI:
 
         assert decision == "new_execution"
 
+        if engine is not None:
+            return await _answer_with_homes_prime(
+                request,
+                engine=engine,
+                body=canonical_body,
+                message_content=trimmed_content,
+                scope_key=scope_key,
+                eligibility_token=eligibility_token,
+                request_id=preflight.request_id,
+            )
+
+        assert config.legacy_upstream is not None
         session_id = body["session_id"]
         turn_id = message["turn_id"]
         history = body.get("history", [])
@@ -405,5 +522,46 @@ def create_app(*, config: Config) -> FastAPI:
         return _success_response(
             request, body=dumped, request_id=preflight.request_id, config=config
         )
+
+    async def _answer_with_homes_prime(
+        request: Request,
+        *,
+        engine: HomesPrimeEngine,
+        body: dict[str, Any],
+        message_content: str,
+        scope_key: IdempotencyScopeKey,
+        eligibility_token: str,
+        request_id: str,
+    ) -> JSONResponse:
+        """One guest.answer attempt is one Homes Prime pipeline, hard-capped at RC2 §6's 15s.
+        Every modeled outcome durably completes the idempotency record so a duplicate replays the
+        same definitive result instead of starting a second paid pipeline (RC2 §11)."""
+        error: GuestAnswerError
+        try:
+            answer_body = await asyncio.wait_for(
+                engine.answer(body, message_content), timeout=GUEST_ATTEMPT_BUDGET_MS / 1000
+            )
+        except TimeoutError:
+            error = DeadlineExceededError()
+        except GuestAnswerError as exc:
+            error = exc
+        else:
+            await idempotency_store.complete(
+                scope_key,
+                response={"kind": "success", "body": answer_body},
+                snapshot_digest=eligibility_token,
+                failed=False,
+            )
+            return _success_response(
+                request, body=answer_body, request_id=request_id, config=config
+            )
+
+        await idempotency_store.complete(
+            scope_key,
+            response={"kind": "error", "code": error.code},
+            snapshot_digest=eligibility_token,
+            failed=False,
+        )
+        raise error
 
     return app

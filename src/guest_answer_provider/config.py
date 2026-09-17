@@ -23,6 +23,8 @@ DEFAULT_IDEMPOTENCY_TTL_SECONDS: Final = 900
 DEFAULT_IDEMPOTENCY_IN_PROGRESS_CEILING_SECONDS: Final = 15
 """Legacy upstream timeout (10s) plus grace, before a stuck in_progress record is treated as
 unresolved (covers a process crash mid-request)."""
+HOMES_PRIME_IN_PROGRESS_CEILING_SECONDS: Final = 20
+"""RC2 §6 15-second attempt plus grace for idempotency completion."""
 
 
 class ConfigError(ValueError):
@@ -105,6 +107,119 @@ class LegacyUpstreamConfig:
         )
 
 
+AnswerEngineName = Literal["legacy-bridge", "homes-prime"]
+
+DEFAULT_GENERATE_PROFILE_ID: Final = "utopia-homes.public-answer.generate.v1"
+DEFAULT_REVIEW_PROFILE_ID: Final = "utopia-homes.public-answer.support-review.v1"
+DEFAULT_EXECUTION_SUBJECT: Final = "stoin:synth:utopia-homes-prime"
+DEFAULT_APPROVED_HOSTNAMES: Final = ("www.utopiahomes.com",)
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionProfileConfig:
+    profile_id: str
+    ceiling_ms: int
+    max_output_tokens: int
+    max_cost_microusd: int
+
+
+@dataclass(frozen=True, slots=True)
+class HomesPrimeConfig:
+    """Stage 2 candidate engine settings. Every value that selects a provider route, credential, or
+    spending ceiling is Tiamat-provisioned deployment policy; nothing here defaults a real one."""
+
+    execution_url: str
+    execution_key_id: str
+    execution_issuer: str
+    execution_subject: str
+    execution_private_key_pem: str
+    generate: ExecutionProfileConfig
+    review: ExecutionProfileConfig
+    transit_allowance_ms: int
+    prime_reserve_ms: int
+    knowledge_path: str
+    knowledge_allowed_digests: frozenset[str]
+    knowledge_withdrawn_ids: frozenset[str]
+    approved_hostnames: frozenset[str]
+
+    @classmethod
+    def from_environment(cls, env: Mapping[str, str]) -> HomesPrimeConfig:
+        prefix = f"{_ENV_PREFIX}HOMES_PRIME_"
+
+        def require(name: str) -> str:
+            value = (env.get(prefix + name) or "").strip()
+            if not value:
+                raise ConfigError(f"missing required environment variable {prefix}{name}")
+            return value
+
+        def optional(name: str, default: str) -> str:
+            value = (env.get(prefix + name) or "").strip()
+            return value or default
+
+        def integer(name: str, default: str | None, low: int, high: int) -> int:
+            raw = require(name) if default is None else optional(name, default)
+            try:
+                value = int(raw)
+            except ValueError as exc:
+                raise ConfigError(f"{prefix}{name} must be an integer") from exc
+            if not low <= value <= high:
+                raise ConfigError(f"{prefix}{name} must be within {low}-{high}")
+            return value
+
+        def profile(
+            kind: str, default_id: str, ceiling: str, tokens: str
+        ) -> ExecutionProfileConfig:
+            return ExecutionProfileConfig(
+                profile_id=optional(f"{kind}_PROFILE_ID", default_id),
+                ceiling_ms=integer(f"{kind}_CEILING_MS", ceiling, 1_000, 18_000),
+                max_output_tokens=integer(f"{kind}_MAX_OUTPUT_TOKENS", tokens, 1, 4_096),
+                # Spending ceilings are deployment policy: required, never defaulted.
+                max_cost_microusd=integer(f"{kind}_MAX_COST_MICROUSD", None, 1, 1_000_000),
+            )
+
+        digests_raw = require("KNOWLEDGE_ALLOWED_DIGESTS")
+        digests = frozenset(item.strip() for item in digests_raw.split(",") if item.strip())
+        if not digests or not all(re.fullmatch(r"[a-f0-9]{64}", item) for item in digests):
+            raise ConfigError(f"{prefix}KNOWLEDGE_ALLOWED_DIGESTS must be lowercase SHA-256 values")
+
+        try:
+            withdrawn = json.loads(optional("KNOWLEDGE_WITHDRAWN_IDS_JSON", "[]"))
+        except json.JSONDecodeError as exc:
+            raise ConfigError(f"{prefix}KNOWLEDGE_WITHDRAWN_IDS_JSON is not valid JSON") from exc
+        if not isinstance(withdrawn, list) or not all(isinstance(i, str) and i for i in withdrawn):
+            raise ConfigError(f"{prefix}KNOWLEDGE_WITHDRAWN_IDS_JSON must be an array of ids")
+
+        hostnames = frozenset(
+            item.strip().lower()
+            for item in optional(
+                "APPROVED_HOSTNAMES", ",".join(DEFAULT_APPROVED_HOSTNAMES)
+            ).split(",")
+            if item.strip()
+        )
+        if not hostnames or not all(_SITE_HOSTNAME_RE.fullmatch(host) for host in hostnames):
+            raise ConfigError(f"{prefix}APPROVED_HOSTNAMES must list valid DNS hostnames")
+
+        private_key_pem = require("EXECUTION_PRIVATE_KEY_PEM")
+        if "BEGIN PRIVATE KEY" not in private_key_pem:
+            raise ConfigError(f"{prefix}EXECUTION_PRIVATE_KEY_PEM must be a PKCS#8 PEM key")
+
+        return cls(
+            execution_url=require("EXECUTION_URL"),
+            execution_key_id=require("EXECUTION_KEY_ID"),
+            execution_issuer=require("EXECUTION_ISSUER"),
+            execution_subject=optional("EXECUTION_SUBJECT", DEFAULT_EXECUTION_SUBJECT),
+            execution_private_key_pem=private_key_pem,
+            generate=profile("GENERATE", DEFAULT_GENERATE_PROFILE_ID, "9000", "900"),
+            review=profile("REVIEW", DEFAULT_REVIEW_PROFILE_ID, "4000", "300"),
+            transit_allowance_ms=integer("TRANSIT_ALLOWANCE_MS", "250", 0, 5_000),
+            prime_reserve_ms=integer("RESERVE_MS", "1500", 0, 10_000),
+            knowledge_path=require("KNOWLEDGE_PATH"),
+            knowledge_allowed_digests=digests,
+            knowledge_withdrawn_ids=frozenset(withdrawn),
+            approved_hostnames=hostnames,
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class Config:
     environment: Environment
@@ -114,9 +229,11 @@ class Config:
     log_level: str
     idempotency_ttl_seconds: float
     idempotency_in_progress_ceiling_seconds: float
-    legacy_upstream: LegacyUpstreamConfig
+    legacy_upstream: LegacyUpstreamConfig | None
     business_release_id: str
     knowledge_release_id: str
+    answer_engine: AnswerEngineName = "legacy-bridge"
+    homes_prime: HomesPrimeConfig | None = None
 
     @classmethod
     def from_environment(cls, environment: Mapping[str, str] | None = None) -> Config:
@@ -185,9 +302,33 @@ class Config:
 
         log_level = (optional("LOG_LEVEL", "INFO") or "INFO").upper()
 
-        legacy_upstream = LegacyUpstreamConfig.from_environment(
-            env, provider_environment=provider_environment
-        )
+        answer_engine = optional("ANSWER_ENGINE", "legacy-bridge") or "legacy-bridge"
+        if answer_engine not in ("legacy-bridge", "homes-prime"):
+            raise ConfigError(
+                f"{_ENV_PREFIX}ANSWER_ENGINE must be 'legacy-bridge' or 'homes-prime'"
+            )
+
+        legacy_upstream: LegacyUpstreamConfig | None = None
+        homes_prime: HomesPrimeConfig | None = None
+        if answer_engine == "legacy-bridge":
+            legacy_upstream = LegacyUpstreamConfig.from_environment(
+                env, provider_environment=provider_environment
+            )
+        else:
+            # The Stage 2 candidate has no activation approval: it may run only in preview, and
+            # the legacy path stays the unchanged default everywhere else.
+            if provider_environment != "preview":
+                raise ConfigError("the homes-prime answer engine is permitted only in preview")
+            homes_prime = HomesPrimeConfig.from_environment(env)
+            # A pipeline may legitimately run for the full 15s attempt; an in-progress record must
+            # not be declared unresolved while its only pipeline can still complete.
+            if optional("IDEMPOTENCY_IN_PROGRESS_CEILING_SECONDS") is None:
+                idempotency_in_progress_ceiling_seconds = HOMES_PRIME_IN_PROGRESS_CEILING_SECONDS
+            elif idempotency_in_progress_ceiling_seconds < HOMES_PRIME_IN_PROGRESS_CEILING_SECONDS:
+                raise ConfigError(
+                    f"{_ENV_PREFIX}IDEMPOTENCY_IN_PROGRESS_CEILING_SECONDS must be at least "
+                    f"{HOMES_PRIME_IN_PROGRESS_CEILING_SECONDS} for the homes-prime engine"
+                )
 
         release_id_pattern = r"^[\x21-\x7e]{1,128}$"
         business_release_id = require("BUSINESS_RELEASE_ID")
@@ -212,6 +353,8 @@ class Config:
             legacy_upstream=legacy_upstream,
             business_release_id=business_release_id,
             knowledge_release_id=knowledge_release_id,
+            answer_engine=answer_engine,  # type: ignore[arg-type]
+            homes_prime=homes_prime,
         )
 
     @staticmethod

@@ -28,6 +28,9 @@ jobs:
           python contracts/stoin-business-guest-answer-v1-bundle/tools/compute_digest.py --check
           python contracts/stoin-business-guest-answer-v1-bundle/tools/verify_bundle.py
 
+      - name: Verify pinned Shared Model Execution RC1 freeze package
+        run: python contracts/stoin-shared-model-execution-v1-rc1/verify_pin.py
+
       - name: Unit + integration tests
         run: pytest -m "not contract" tests/unit tests/integration
 

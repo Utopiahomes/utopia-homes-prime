@@ -40,6 +40,14 @@ independent process — Stoin Control stays completely outside this guest reques
 conformance bundle under `contracts/` is the only shared artifact between this repo and the
 Control-side and website-consumer implementations, pinned by digest.
 
+**Stage 2 candidate (local only):** `GUEST_ANSWER_PROVIDER_ANSWER_ENGINE=homes-prime` switches this
+service to the Homes Prime engine: Homes-owned prompts, a digest-pinned approved knowledge
+projection, deterministic grounding checks, a support-review pass, and a private
+`inference.execute@1.0` client for Shared Model Execution (RC1, pinned under
+`contracts/stoin-shared-model-execution-v1-rc1/`). It is refused outside `preview`, the legacy
+bridge stays the default, and nothing has been deployed or run against a real provider. See
+`docs/homes-prime-stage2.md`.
+
 ## Layout
 
 ```
@@ -90,6 +98,7 @@ mypy src
 # Confirms the vendored bundle hasn't drifted from its pinned digest.
 python contracts/stoin-business-guest-answer-v1-bundle/tools/compute_digest.py --check
 python contracts/stoin-business-guest-answer-v1-bundle/tools/verify_bundle.py
+python contracts/stoin-shared-model-execution-v1-rc1/verify_pin.py   # RC1 digests
 
 pytest -m "not contract"   # fast — unit + integration, ~20s, includes full vector replay
 pytest -m contract         # spawns real subprocesses + a real fake-upstream HTTP server, ~20s

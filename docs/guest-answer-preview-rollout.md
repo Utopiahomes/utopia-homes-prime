@@ -64,7 +64,15 @@ Provision and traffic sequence for Stage 1 (still not executed — proposed only
    existing `/api/lucy` route's same-origin/session mechanism — ideally an explicit staff-session
    claim, since this route has no guest-facing UI wired to it at all yet.
 
-## Stage 2 — the conformant Homes Prime provider (not started)
+## Stage 2 — the conformant Homes Prime provider (local candidate implemented, not activated)
+
+**Update (2026-09-17):** a local Stage 2 candidate now exists behind
+`GUEST_ANSWER_PROVIDER_ANSWER_ENGINE=homes-prime` (preview-only by config), built against the
+pinned Shared Model Execution RC1 freeze package with a fake execution service. It is not
+activated, not conformance-claimed, and has no Tier B evidence; the legacy bridge remains the
+default. See `docs/homes-prime-stage2.md` for what moved into Homes, the private client, the
+failure mapping, and the Tiamat-side dependencies still open. The original requirements below
+are kept as written.
 
 Stage 2 is a different architecture, not an extension of Stage 1's traffic ramp. It requires:
 

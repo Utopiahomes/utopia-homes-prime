@@ -1,0 +1,34 @@
+{
+  "schema": "utopia-homes.pinned-external-contract.v1",
+  "capability": "inference.execute@1.0",
+  "release": "rc1",
+  "role_in_this_repo": "caller (calling synth: Utopia Homes Prime)",
+  "source": {
+    "repository": "cloud-hermes-lucy",
+    "branch": "codex/management-contract-v1",
+    "lyra_checkpoint_commit": "a4e52382a43e18672d8fc100d065a31f8d78fef6"
+  },
+  "artifacts": {
+    "wire_and_architecture_contract": {
+      "path": "docs/stoin-shared-model-execution-contract-v1-rc1.md",
+      "bytes": 97610,
+      "sha256": "a010c2cd5d501dd5586be3e1c54753ed7bf82505b9971d19c007e227bb9a75a8"
+    },
+    "runtime_recovery_companion": {
+      "path": "docs/stoin-shared-model-execution-runtime-recovery-v1-rc1.md",
+      "bytes": 29414,
+      "sha256": "9ac574affc4cd5c9dc5266b4665d64409cf387abc69c59918d7fbe0475ddbc34"
+    },
+    "normative_recovery_extract": {
+      "bytes": 26488,
+      "sha256": "d8cb89be105e4507f493e5ad88d365834fc5538bb1e4f315701325e195810176",
+      "extraction_rule": "companion bytes after the LF that ends the BEGIN marker line, up to but excluding the LF that precedes the END marker line; must equal contract bytes from the '## 11.' heading up to but excluding the LF that ends the last line before the blank line preceding '## 14.'"
+    },
+    "freeze_manifest": {
+      "path": "freeze-manifest.json",
+      "sha256": "ab1273ccba978574e756c13781e998ae6f3f4c8f3d89e80f2263813585f4bd99",
+      "note": "recorded as observed at the checkpoint; the owner-supplied pins are the three digests above"
+    }
+  },
+  "authorization": "local Homes-side Stage 2 code, tests, documentation, and commits only; no provider calls, credentials, spending, infrastructure, deployment, production traffic, corpus reauthorization, or removal of the rollback path"
+}
