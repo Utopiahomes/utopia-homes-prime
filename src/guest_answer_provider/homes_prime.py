@@ -241,12 +241,22 @@ def _string(**bounds: int) -> dict[str, Any]:
 
 
 def draft_schema(knowledge: EffectiveKnowledge) -> dict[str, Any]:
-    evidence_item: dict[str, Any] = _string(minLength=1, maxLength=128)
-    if len(knowledge.entries_by_id) <= sme_wire.SCHEMA_MAX_ENUM_MEMBERS:
-        evidence_item = {"type": "string", "enum": sorted(knowledge.entries_by_id)}
-    link_item: dict[str, Any] = _string(minLength=1, maxLength=128)
-    if 0 < len(knowledge.links_by_id) <= sme_wire.SCHEMA_MAX_ENUM_MEMBERS:
-        link_item = {"type": "string", "enum": sorted(knowledge.links_by_id)}
+    """Evidence and link IDs are always constrained by enum, never downgraded to free strings.
+    The admitted packet is bounded at assembly (knowledge.MAX_ADMITTED_IDS), so an oversized
+    packet fails closed before any execution request is built."""
+    if not knowledge.entries_by_id:
+        raise KnowledgeUnavailable("no admitted evidence")
+    for ids in (knowledge.entries_by_id, knowledge.links_by_id):
+        if len(ids) > sme_wire.SCHEMA_MAX_ENUM_MEMBERS:
+            raise KnowledgeUnavailable("admitted identifiers exceed the enum bound")
+    evidence_item = {"type": "string", "enum": sorted(knowledge.entries_by_id)}
+    link_ids: dict[str, Any] = {"type": "array", "maxItems": 0}
+    if knowledge.links_by_id:
+        link_ids = {
+            "type": "array",
+            "maxItems": patterns.ACTIONS_MAX_ITEMS,
+            "items": {"type": "string", "enum": sorted(knowledge.links_by_id)},
+        }
     return {
         "type": "object",
         "properties": {
@@ -270,11 +280,7 @@ def draft_schema(knowledge: EffectiveKnowledge) -> dict[str, Any]:
                     "additionalProperties": False,
                 },
             },
-            "link_ids": {
-                "type": "array",
-                "maxItems": patterns.ACTIONS_MAX_ITEMS,
-                "items": link_item,
-            },
+            "link_ids": link_ids,
         },
         "required": ["outcome", "segments", "link_ids"],
         "additionalProperties": False,

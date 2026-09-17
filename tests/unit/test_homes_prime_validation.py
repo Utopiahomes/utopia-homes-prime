@@ -208,6 +208,26 @@ def test_draft_schema_enums_constrain_ids_to_the_effective_packet(knowledge):
         sme_wire.validate_instance(schema, draft(("business_claim", "x", ["expired-promotion"])))
 
 
+def test_draft_schema_never_drops_id_enums(knowledge):
+    from guest_answer_provider.knowledge import EffectiveKnowledge, KnowledgeUnavailable
+
+    schema = homes_prime.draft_schema(knowledge)
+    link_items = schema["properties"]["link_ids"]["items"]
+    assert sorted(link_items["enum"]) == sorted(knowledge.links_by_id)
+
+    no_links = EffectiveKnowledge("k", "t", dict(knowledge.entries_by_id), {})
+    schema = homes_prime.draft_schema(no_links)
+    assert schema["properties"]["link_ids"] == {"type": "array", "maxItems": 0}
+    sme_wire.check_restricted_schema(schema)
+
+    entry = next(iter(knowledge.entries_by_id.values()))
+    oversized = EffectiveKnowledge(
+        "k", "t", {f"e{i}": entry for i in range(65)}, dict(knowledge.links_by_id)
+    )
+    with pytest.raises(KnowledgeUnavailable):
+        homes_prime.draft_schema(oversized)
+
+
 def test_numbers_from_the_visitor_question_are_permitted(knowledge):
     content = draft(
         (

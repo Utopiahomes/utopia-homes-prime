@@ -310,6 +310,26 @@ def test_withdrawn_knowledge_is_absent_from_model_context(tmp_path):
     assert response.json()["error"]["code"] == "temporarily_unavailable"
 
 
+def test_oversized_evidence_packet_fails_closed_without_execution(tmp_path):
+    from fixtures.homes_knowledge import padded_corpus, write_corpus
+
+    stage = Stage2(tmp_path)
+    oversized = tmp_path / "oversized"
+    oversized.mkdir()
+    path, digest = write_corpus(oversized, padded_corpus(66))
+    env = dict(stage.harness.env)
+    env["GUEST_ANSWER_PROVIDER_HOMES_PRIME_KNOWLEDGE_PATH"] = str(path)
+    env["GUEST_ANSWER_PROVIDER_HOMES_PRIME_KNOWLEDGE_ALLOWED_DIGESTS"] = digest
+    app = create_app(
+        config=Config.from_environment(env), execution_transport=stage.fake.transport()
+    )
+    with TestClient(app) as client:
+        response = client.post(ENDPOINT, json=_body(), headers=stage.headers())
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "temporarily_unavailable"
+    assert stage.fake.attempts == []
+
+
 def test_homes_prime_engine_is_refused_outside_preview(tmp_path):
     harness = build_homes_prime_env(
         tmp_path, extra={"GUEST_ANSWER_PROVIDER_ENVIRONMENT": "production"}

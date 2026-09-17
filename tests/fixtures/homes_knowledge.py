@@ -115,6 +115,45 @@ SYNTHETIC_ENTRIES: list[dict[str, object]] = [
 ]
 
 
+def padded_corpus(total_entries: int) -> dict[str, object]:
+    """The synthetic corpus padded with synthetic description entries (each with one link) until
+    it holds `total_entries` entries, of which all but the expired one are effective."""
+    document = synthetic_corpus()
+    entries: list[dict[str, object]] = document["entries"]  # type: ignore[assignment]
+    index = 0
+    while len(entries) < total_entries:
+        index += 1
+        entries.append(
+            {
+                "id": f"synthetic-note-{index}",
+                "service_line": "general",
+                "kind": "description",
+                "title": f"Synthetic note {index}",
+                "approved_text": f"Synthetic approved note number {index}.",
+                "aliases": [],
+                "topics": ["synthetic"],
+                "route": "about",
+                "source": {"id": "about-page", "label": "About", "href": f"{HOST}/about"},
+                "links": [
+                    {
+                        "id": f"synthetic-note-{index}-link",
+                        "label": "Read more",
+                        "href": f"{HOST}/about/note-{index}",
+                    }
+                ],
+                "effective_from": EFFECTIVE,
+                "direct_answer": False,
+            }
+        )
+    return document
+
+
+def write_corpus(directory: Path, document: dict[str, object]) -> tuple[Path, str]:
+    path = directory / "synthetic-knowledge.json"
+    path.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path, canonical_corpus_digest(document)
+
+
 def synthetic_corpus() -> dict[str, object]:
     return {
         "schema": "lucy-public-knowledge-v1",

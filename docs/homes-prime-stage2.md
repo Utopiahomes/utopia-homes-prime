@@ -116,24 +116,35 @@ All knowledge used in tests is a clearly labeled synthetic fixture. The Ray-appr
 read in place only by the opt-in test (`HOMES_PRIME_R1_CORPUS_PATH`) and is never vendored or sent
 anywhere.
 
-## Dependencies to bring back to Tiamat / Lyra (not guessed here)
+## Decisions recorded (Lyra, 2026-09-17)
 
-1. **Timing conflict.** SME RC1 §18's initial activation plan (11 s generation + 5 s review + 6 s
-   reserve inside the 22 s interaction) does not fit RC2 §6's 15 s per-attempt provider limit;
-   11 + 5 alone is 16 s. This implementation enforces RC2 (defaults 9 s / 4 s). Needs a decision:
-   lower the SME profile ceilings, or revise the RC2 attempt limit.
-2. **Execution identity provisioning:** issuer value, `kid`, confirmation of
-   `sub=stoin:synth:utopia-homes-prime`, public-key registration, and preview-endpoint origin.
-3. **Profiles:** confirmation that `utopia-homes.public-answer.generate.v1` and
-   `...support-review.v1` exist with ceilings, `max_output_tokens`, and per-call cost ceilings
-   compatible with the values above; spending ceilings are required config with no defaults.
-4. **Structured output:** whether the profiles faithfully enforce `json_schema` with `enum` (Homes
-   constrains evidence/link IDs by enum while the packet has ≤ 64 entries; above that the enum is
-   dropped and only Homes-side validation constrains IDs).
-5. **Review payload privacy:** the support-review call sends the approved context, the visitor
-   message, and the candidate answer; route acceptance must cover that content.
-6. **Knowledge authorization for provider use.** The only approved corpus (R1, digest `95e2e20a…`)
-   is authorized for local R1 testing only, explicitly not provider use. Any preview run through a
-   real provider needs a separately approved Homes knowledge release.
-7. **RC1 conformance bundle.** Not built in this change. Client correctness here rests on
-   independent unit/integration/network tests, not on a shared vector bundle.
+Lyra accepted `172045a` as the local Homes Stage 2 candidate (not a conformant or deployable
+release) and settled the returned dependencies:
+
+1. **Timing.** RC2's 15 s attempt and 22 s interaction limits stand. Preview uses 9 s generation +
+   4 s review + 2 × 250 ms transit + 1.5 s Prime reserve = 15 s (the config defaults). SME RC1
+   §18's 11/5/6 s example is superseded as an activation plan; it was non-normative, so the frozen
+   wire contract is unchanged.
+2. **Profiles confirmed:** `utopia-homes.public-answer.generate.v1` (9 000 ms / 900 generated
+   tokens) and `utopia-homes.public-answer.support-review.v1` (4 000 ms / 300 generated tokens), no
+   provider fallback. Per-call cost ceilings stay unset until provider/model pricing is selected;
+   the config requires them and has no defaults.
+3. **Structured output.** Both profiles must faithfully support RC1's restricted `json_schema` with
+   no downgrade. Homes never drops its evidence-ID or link-ID enums: the admitted packet is bounded
+   at 64 IDs of each (`knowledge.MAX_ADMITTED_IDS`), and a larger effective set fails closed as
+   `temporarily_unavailable` before any execution request is built. Withdrawal or a smaller
+   release brings a corpus back inside the bound. Selecting a relevant subset instead of failing
+   closed would be a separate retrieval design decision.
+4. **Execution identity.** Subject confirmed as `stoin:synth:utopia-homes-prime` (the config
+   default). Issuer, `kid`, registered public key, and endpoint come from Tiamat provisioning and
+   are not invented here.
+5. **Review privacy.** The approved route must cover the whole support-review payload (visitor
+   message, approved context, candidate answer) under the same retention, training-denial, region,
+   and logging constraints.
+6. **Knowledge.** The existing R1 corpus stays local-testing-only; a real-provider preview needs an
+   explicitly authorized Homes knowledge release.
+7. **Conformance.** Lyra builds and independently verifies the RC1 conformance bundle next. These
+   tests are implementation evidence, not a replacement for it.
+
+Remaining Tiamat activation inputs: issuer, `kid`, public-key registration, endpoint, cost ceilings,
+provider route, and the provider-authorized knowledge release.

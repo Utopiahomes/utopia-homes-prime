@@ -101,6 +101,33 @@ def test_all_entries_expired_is_unavailable(tmp_path):
         _load(path, digest).effective(datetime(2020, 1, 1, tzinfo=UTC))
 
 
+def test_admitted_packet_is_bounded_at_the_rc1_enum_limit(tmp_path):
+    """Lyra 2026-09-17: keep the admitted evidence set at 64 IDs or fewer, or fail closed; never
+    drop the schema enum. The synthetic corpus has one expired entry, so N+1 entries admit N."""
+    from fixtures.homes_knowledge import padded_corpus, write_corpus
+
+    from guest_answer_provider import sme_wire
+    from guest_answer_provider.knowledge import MAX_ADMITTED_IDS
+
+    assert MAX_ADMITTED_IDS == sme_wire.SCHEMA_MAX_ENUM_MEMBERS == 64
+
+    at_limit = tmp_path / "at-limit"
+    at_limit.mkdir()
+    path, digest = write_corpus(at_limit, padded_corpus(65))
+    assert len(_load(path, digest).effective(NOW).entries_by_id) == 64
+
+    over = tmp_path / "over"
+    over.mkdir()
+    path, digest = write_corpus(over, padded_corpus(66))
+    with pytest.raises(KnowledgeUnavailable, match="64"):
+        _load(path, digest).effective(NOW)
+
+    # Withdrawal brings an oversized corpus back within the admitted bound.
+    assert (
+        len(_load(path, digest, withdrawn={"synthetic-note-1"}).effective(NOW).entries_by_id) == 64
+    )
+
+
 R1_PATH = os.environ.get("HOMES_PRIME_R1_CORPUS_PATH")
 R1_APPROVED_DIGEST = "95e2e20a9e4a3786e3daa63a73bb5ff2866b5bae295e6dc138bf432e4361c422"
 

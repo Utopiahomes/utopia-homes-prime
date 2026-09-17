@@ -28,6 +28,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from guest_answer_provider import patterns
 
 KNOWLEDGE_SCHEMA = "lucy-public-knowledge-v1"
+MAX_ADMITTED_IDS = 64
+"""SME RC1 §9.3.2 caps an enum at 64 members. Homes constrains the model's evidence and link IDs
+by enum, so an answer's admitted packet holds at most 64 of each; a larger effective set fails
+closed rather than dropping the enum (Lyra decision, 2026-09-17)."""
 CONTEXT_SCHEMA = "homes-public-context-v1"
 
 _LOCAL_ID_RE = re.compile(r"^(?=[a-z0-9-]{1,95}$)[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -273,6 +277,8 @@ class KnowledgeProjection:
                 if existing is not None and existing != candidate:
                     raise KnowledgeUnavailable("approved link identifier is ambiguous")
                 links[link.id] = candidate
+        if len(entries) > MAX_ADMITTED_IDS or len(links) > MAX_ADMITTED_IDS:
+            raise KnowledgeUnavailable("admitted evidence packet exceeds 64 identifiers")
         return EffectiveKnowledge(
             release_id=self.release_id,
             eligibility_token=self.eligibility_token,
