@@ -14,8 +14,15 @@ below rather than silently worked around:
    any other mode outright (sme_wire.py:727). The bundle's own generic response/invariant vectors
    default to `text` mode. For vectors that must be ACCEPTED (the tolerant-consumer proof and the
    usage/cost invariant positives), `_as_json_schema_output()` substitutes a compatible `output`
-   block while keeping every other vendored field verbatim. Vectors that must be REJECTED are
-   replayed unmodified -- the mode mismatch is then just one more valid reason they fail closed.
+   block while keeping every other vendored field verbatim. For vectors that must be REJECTED,
+   each negative-vector section below has two tests: a "_literal" one that replays the vector
+   unmodified (proves *some* WireViolation fires, which for text-mode vectors may be the
+   categorical mode check rather than the vector's own named rule), and a
+   "_reject_for_their_named_rule" one that adapts the output to json_schema mode where needed and
+   asserts the *exact* WireViolation message the vector's own `rule` field names -- real proof of
+   the specific check, not just that rejection happened for some reason. Which rule actually fires
+   for the unmodified literal replay is stated per vector below, confirmed by running it, not
+   assumed from check order.
 
 2. **Error receipts.** `error.pos.*.json` vectors test only the §16 exact message/retryable tuple
    (their own `rule` field says so) and omit the `execution`/`cost` receipts that
@@ -43,6 +50,7 @@ Deliberately NOT replayed here, as a documented scope boundary rather than a gap
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 from sme_vector_helpers import VECTORS, load_json, vectors_in
@@ -125,14 +133,44 @@ def test_response_pos_json_vector_accepted():
     ],
     ids=lambda p: p.stem,
 )
-def test_response_negative_vectors_fail_closed(path):
-    """response.mode-shape is already json_schema mode, so this exercises the exact rule under
-    test (content must be an object). bad-finish/bad-uuid are still text-mode in the bundle, so
-    they fail closed via the categorical mode rejection rather than their nominal rule -- still a
-    genuine "fails closed" result, just not proof of the specific finish_reason/UUID check."""
+def test_response_negative_vectors_fail_closed_literal(path):
+    """Literal RC1 vector replay, byte-for-byte, no adaptation: proves the response is rejected.
+    For bad-finish/bad-uuid this already happens to hit the exact named rule, because sme_wire.py
+    checks finish_reason (line 723) and execution_id (line 712) before the output-mode check (line
+    727) -- but this test doesn't assert that, only that *some* WireViolation was raised, so it
+    would keep passing even if a future check-ordering change let the mode mismatch mask the named
+    rule instead. See test_response_negative_vectors_reject_for_their_named_rule below for the
+    assertion that pins the exact message and would catch that regression."""
     vector = load_json(path)
     with pytest.raises(WireViolation):
         _parse_generate_success(vector["document"])
+
+
+@pytest.mark.parametrize(
+    ("path", "expected_message"),
+    [
+        (VECTORS / "negative" / "response.bad-finish.json", "finish_reason must be exactly 'stop'"),
+        (VECTORS / "negative" / "response.bad-uuid.json", "execution_id must be a UUID v4"),
+        (
+            VECTORS / "negative" / "response.mode-shape.json",
+            "json_schema output content must be a parsed JSON object",
+        ),
+    ],
+    ids=lambda x: x if isinstance(x, str) else x.stem,
+)
+def test_response_negative_vectors_reject_for_their_named_rule(path, expected_message):
+    """Homes-adapted fixture, not a literal bundle vector: response.mode-shape is already
+    json_schema mode and needs no change. bad-finish/bad-uuid are adapted to json_schema mode
+    (content becomes a dict, preserving the vector's own deliberate mutation) so the categorical
+    mode check from the literal-replay test above cannot mask which rule actually fires -- this
+    asserts the exact WireViolation message the vector's own `rule` field names, not just that
+    *some* WireViolation was raised."""
+    vector = load_json(path)
+    document = vector["document"]
+    if document["output"]["mode"] != "json_schema":
+        document = _as_json_schema_output(document, content=ANSWER_CONTENT)
+    with pytest.raises(WireViolation, match=re.escape(expected_message)):
+        _parse_generate_success(document)
 
 
 # --- tolerant-consumer proof: permitted additive fields are accepted ------------------------------
@@ -180,13 +218,44 @@ def test_usage_cost_invariant_positive_vectors_accepted(path):
     ],
     ids=lambda p: p.stem,
 )
-def test_usage_cost_invariant_negative_vectors_fail_closed(path):
-    """These are still text-mode in the bundle, so (as with response.bad-finish/bad-uuid above)
-    this proves fail-closed, not specifically that the usage/cost arithmetic check is what fired."""
+def test_usage_cost_invariant_negative_vectors_fail_closed_literal(path):
+    """Literal replay: these vectors are text-mode in the bundle, and sme_wire.py's output-mode
+    check (line 727) runs before the usage/cost checks (lines 741+), so this genuinely fails via
+    the categorical mode mismatch -- confirmed empirically, not assumed -- rather than the named
+    usage/cost arithmetic rule. See the adapted test below for proof of the named rule itself."""
     vector = load_json(path)
     assert vector["holds"] is False
     with pytest.raises(WireViolation):
         _parse_generate_success(vector["document"])
+
+
+@pytest.mark.parametrize(
+    ("path", "expected_message"),
+    [
+        (
+            VECTORS / "invariants" / "inv.usage.neg.sum.json",
+            "usage breakdown does not sum to generated_tokens",
+        ),
+        (
+            VECTORS / "invariants" / "inv.usage.neg.partial-null.json",
+            "usage breakdown fields must both be integers or both be null",
+        ),
+        (
+            VECTORS / "invariants" / "inv.cost.neg.over.json",
+            "settled cost must be non-null and no greater than the reservation",
+        ),
+    ],
+    ids=lambda x: x if isinstance(x, str) else x.stem,
+)
+def test_usage_cost_invariant_negative_vectors_reject_for_their_named_rule(path, expected_message):
+    """Homes-adapted fixture: substitutes a json_schema output block so the categorical mode
+    check can't mask the usage/cost arithmetic rule under test, then asserts the exact message
+    naming that rule -- I-02/I-03's own arithmetic, not just "some WireViolation fired"."""
+    vector = load_json(path)
+    assert vector["holds"] is False
+    document = _as_json_schema_output(vector["document"], content=ANSWER_CONTENT)
+    with pytest.raises(WireViolation, match=re.escape(expected_message)):
+        _parse_generate_success(document)
 
 
 # --- messages invariant (I-01), mode-independent --------------------------------------------------
