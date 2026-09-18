@@ -15,6 +15,7 @@ Regenerate the fixtures with:
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -36,8 +37,15 @@ FIXTURES_PATH = (
 )
 
 
-def _load_fixtures() -> list[dict]:
+_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _load_fixture_file() -> dict:
     return json.loads(FIXTURES_PATH.read_text(encoding="utf-8"))
+
+
+def _load_fixtures() -> list[dict]:
+    return _load_fixture_file()["vectors"]
 
 
 def _fixture_id(fixture: dict) -> str:
@@ -99,6 +107,20 @@ def test_canonical_identity_matches_tiamat(fixture: dict) -> None:
 def test_fixtures_cover_json_schema_and_text_modes() -> None:
     modes = {fixture["document"]["output"]["mode"] for fixture in _load_fixtures()}
     assert modes == {"json_schema", "text"}
+
+
+def test_fixtures_are_pinned_to_a_named_tiamat_revision() -> None:
+    """The fixtures aren't just a checked-in value with no provenance: the generation script
+    records exactly which cloud-hermes-lucy-management-v1 commit produced them (see
+    tools/generate_canonical_identity_fixtures.py), so parity can be re-verified against a named
+    revision rather than an untraceable one. `tiamat_tree_dirty` is recorded rather than enforced
+    here -- Homes' test suite can observe that Tiamat's working tree had uncommitted changes at
+    generation time, but can't fix that from this side; it's surfaced for the regeneration record,
+    not treated as a failure of this repo's own tests."""
+    meta = _load_fixture_file()
+    assert _SHA_RE.fullmatch(meta["tiamat_revision"]), "tiamat_revision must be a full 40-hex SHA"
+    assert isinstance(meta["tiamat_tree_dirty"], bool)
+    assert meta["generated_at"]
 
 
 def test_canonical_identity_differs_from_wire_body_digest() -> None:

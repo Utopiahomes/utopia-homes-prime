@@ -21,7 +21,9 @@ independently and compares against these captured values.
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 BUNDLE_REQUEST_VECTORS = [
@@ -79,6 +81,19 @@ EXTRA_DOCUMENTS = [
 ]
 
 
+def _git_revision(repo: Path) -> tuple[str, bool]:
+    """Returns (commit SHA, working-tree-is-dirty). A dirty tree means the fixtures below are only
+    provisionally pinned -- the generation script imports whatever is on disk, not what's committed
+    -- so callers must know when that guarantee is weaker than a clean-tree pin."""
+    revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    status = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout
+    return revision, bool(status.strip())
+
+
 def main() -> None:
     if len(sys.argv) != 2:
         print(__doc__)
@@ -88,6 +103,13 @@ def main() -> None:
     tiamat_src = tiamat_repo / "src"
     if not (tiamat_src / "lucy" / "shared_execution" / "service.py").is_file():
         raise SystemExit(f"not a cloud-hermes-lucy-management-v1 checkout: {tiamat_repo}")
+    revision, dirty = _git_revision(tiamat_repo)
+    if dirty:
+        print(
+            f"warning: {tiamat_repo} has uncommitted changes; the pinned revision {revision} "
+            "only provisionally covers these fixtures",
+            file=sys.stderr,
+        )
 
     sys.path.insert(0, str(tiamat_src))
     from lucy.shared_execution.service import canonical_identity  # type: ignore[import-not-found]
@@ -105,14 +127,20 @@ def main() -> None:
         documents.append(vector["document"])
     documents.extend(EXTRA_DOCUMENTS)
 
-    fixtures = []
+    vectors = []
     for document in documents:
         # model_validate (not the constructor) mirrors how Tiamat itself parses an incoming
         # request body -- the same code path the real server runs, not a shortcut around it.
         request = ExecutionRequest.model_validate(document)
         expected = canonical_identity(request)
-        fixtures.append({"document": document, "expected_canonical_identity": expected})
+        vectors.append({"document": document, "expected_canonical_identity": expected})
 
+    fixtures = {
+        "tiamat_revision": revision,
+        "tiamat_tree_dirty": dirty,
+        "generated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "vectors": vectors,
+    }
     out_path = (
         Path(__file__).resolve().parent.parent
         / "tests"
@@ -124,7 +152,7 @@ def main() -> None:
         encoding="utf-8",
         newline="\n",
     )
-    print(f"wrote {len(fixtures)} fixtures to {out_path}")
+    print(f"wrote {len(vectors)} fixtures (Tiamat revision {revision}) to {out_path}")
 
 
 if __name__ == "__main__":
