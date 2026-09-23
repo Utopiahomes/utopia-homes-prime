@@ -35,8 +35,8 @@ from guest_answer_provider.meeting_materials import MaterialsUnavailable
 IDENTITY = "/business/v1/meeting/identity"
 RESPOND = "/business/v1/meeting/respond"
 DRAFT = "/business/v1/meeting/draft"
-BRIEF_SHA = "54c522fa53bf7ebd94f2938d5fcef5033c7331d6613c77ec717789e73592852b"
-CHECKLIST_SHA = "02e8cc0665ebce585c78d8df993fde1d3d8234269ab43bcc54dd7c6f548c3229"
+BRIEF_SHA = "dd5fcd2211a657a28a6b00d2a50097496379b811554577b60c97a73c36f4687e"
+CHECKLIST_SHA = "33407208407932fc651547e2f1f02210a71b37c987101d4ef08183c6309194ec"
 
 
 @pytest.fixture()

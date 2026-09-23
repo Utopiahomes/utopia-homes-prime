@@ -1,6 +1,6 @@
 # Utopia Homes Owner Onboarding Checklist — Demo v1
 
-> **Demo material. Pending Ray's approval.** Use this list to identify missing information.
+> **Demo material, approved by Ray on 2026-09-23.** Use this list to identify missing information.
 > Do not collect bank, payment, or government ID details in the meeting.
 
 ## Owner and ownership

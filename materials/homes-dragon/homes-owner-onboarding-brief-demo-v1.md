@@ -1,7 +1,7 @@
 # Utopia Homes Owner Onboarding Brief — Demo v1
 
-> **Demo material. Pending Ray's approval.** Property details below are labeled sample data,
-> not a real owner or home. Items marked *to confirm* have not been approved as Utopia policy.
+> **Demo material, approved by Ray on 2026-09-23.** Property details below are labeled sample
+> data, not a real owner or home. Items marked *to confirm* have not been approved as Utopia policy.
 
 ## Purpose of this meeting
 

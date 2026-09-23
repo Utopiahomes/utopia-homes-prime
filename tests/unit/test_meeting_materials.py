@@ -15,10 +15,11 @@ from guest_answer_provider.meeting_materials import (
 )
 
 WORKSPACES_DIGESTS = {
-    # The digests Workspaces computes over its own copies (utopia-wordspaces 22b8384); the
-    # adapter shows a material only when the Dragon reports the same (id, version, sha256).
-    BRIEF["id"]: "54c522fa53bf7ebd94f2938d5fcef5033c7331d6613c77ec717789e73592852b",
-    CHECKLIST["id"]: "02e8cc0665ebce585c78d8df993fde1d3d8234269ab43bcc54dd7c6f548c3229",
+    # The digests Workspaces computes over its own copies (utopia-wordspaces ccfe930, approved by
+    # Ray). The adapter shows a material only when the Dragon reports the same id, version and
+    # sha256.
+    BRIEF["id"]: "dd5fcd2211a657a28a6b00d2a50097496379b811554577b60c97a73c36f4687e",
+    CHECKLIST["id"]: "33407208407932fc651547e2f1f02210a71b37c987101d4ef08183c6309194ec",
 }
 
 

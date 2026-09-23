@@ -50,9 +50,11 @@ recorded digest, or the service refuses to start. A request's materials resolve 
 (id, version); anything else is `403 material_not_permitted` before any execution. Only the
 materials a request names enter the prompt, and `display_material` is constrained to those.
 
-The vendored pair is the Workspaces demo material, byte-identical to its copies (digests
-`54c522fa…` and `02e8cc06…`), and still **pending Ray's approval**. Allowlisting a manifest digest
-is the deployment act that approves it.
+The vendored pair is the Workspaces Demo v1 material, byte-identical to its copies at
+`utopia-wordspaces` `ccfe930` (digests `dd5fcd22…` and `33407208…`), approved by Ray on
+2026-09-23. The earlier pending-approval bytes (`54c522fa…`, `02e8cc06…`) are no longer held, so
+they are no longer reported or accepted. Allowlisting the manifest's digest remains the deployment
+act that puts a manifest into service.
 
 ## Homes rules on model output
 
