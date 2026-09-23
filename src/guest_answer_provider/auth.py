@@ -77,6 +77,7 @@ async def authenticate(
     provider_environment: Environment,
     jti_replay_store: JtiReplayStore,
     now: datetime | None = None,
+    required_scope: str = REQUIRED_SCOPE,
 ) -> AuthenticatedPrincipal:
     """Raises AuthenticationFailure on any problem; on success returns the verified principal."""
     moment = now if now is not None else datetime.now(UTC)
@@ -87,6 +88,7 @@ async def authenticate(
             provider_environment=provider_environment,
             jti_replay_store=jti_replay_store,
             moment=moment,
+            required_scope=required_scope,
         )
     except AuthenticationFailure:
         raise
@@ -101,6 +103,7 @@ async def _authenticate(
     provider_environment: Environment,
     jti_replay_store: JtiReplayStore,
     moment: datetime,
+    required_scope: str,
 ) -> AuthenticatedPrincipal:
     if authorization_header is None:
         raise AuthenticationFailure("missing Authorization header")
@@ -175,7 +178,8 @@ async def _authenticate(
 
     if claims.get("sub") != entry.subject:
         raise AuthenticationFailure("wrong subject")
-    if claims.get("scope") != REQUIRED_SCOPE:
+    # Exactly one capability per token: a meeting.assist token never also carries guest.answer.
+    if claims.get("scope") != required_scope:
         raise AuthenticationFailure("wrong scope")
 
     jti = claims.get("jti")

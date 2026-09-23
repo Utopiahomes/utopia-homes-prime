@@ -191,9 +191,9 @@ class HomesPrimeConfig:
 
         hostnames = frozenset(
             item.strip().lower()
-            for item in optional(
-                "APPROVED_HOSTNAMES", ",".join(DEFAULT_APPROVED_HOSTNAMES)
-            ).split(",")
+            for item in optional("APPROVED_HOSTNAMES", ",".join(DEFAULT_APPROVED_HOSTNAMES)).split(
+                ","
+            )
             if item.strip()
         )
         if not hostnames or not all(_SITE_HOSTNAME_RE.fullmatch(host) for host in hostnames):
@@ -220,6 +220,83 @@ class HomesPrimeConfig:
         )
 
 
+DEFAULT_MEETING_PROFILE_ID: Final = "utopia-homes.meeting-assist.v1"
+MEETING_RESPOND_BUDGET_MS: Final = 10_000
+"""Homes' own cap on one respond call. The spoken-answer target is 3-5 s and routine answers over
+8-10 s are investigated; the cap must also fit inside Tiamat's authorized execution deadlines."""
+MEETING_DRAFT_BUDGET_MS: Final = 20_000
+"""Homes' own cap on one draft call (target: a complete draft within 10-15 s)."""
+MAX_MEETING_IDEMPOTENCY_TTL_SECONDS: Final = 900
+
+
+@dataclass(frozen=True, slots=True)
+class MeetingConfig:
+    """Homes Dragon meeting operations. Inference uses the Homes Prime execution identity under
+    one meeting execution profile; respond and draft use that profile with their own ceilings."""
+
+    respond: ExecutionProfileConfig
+    draft: ExecutionProfileConfig
+    materials_path: str
+    materials_allowed_digests: frozenset[str]
+    idempotency_ttl_seconds: int
+
+    @classmethod
+    def from_environment(cls, env: Mapping[str, str], *, prime: HomesPrimeConfig) -> MeetingConfig:
+        prefix = f"{_ENV_PREFIX}MEETING_"
+
+        def value(name: str, default: str | None) -> str:
+            raw = (env.get(prefix + name) or "").strip()
+            if raw:
+                return raw
+            if default is None:
+                raise ConfigError(f"missing required environment variable {prefix}{name}")
+            return default
+
+        def integer(name: str, default: str | None, low: int, high: int) -> int:
+            try:
+                parsed = int(value(name, default))
+            except ValueError as exc:
+                raise ConfigError(f"{prefix}{name} must be an integer") from exc
+            if not low <= parsed <= high:
+                raise ConfigError(f"{prefix}{name} must be within {low}-{high}")
+            return parsed
+
+        profile_id = value("PROFILE_ID", DEFAULT_MEETING_PROFILE_ID)
+
+        def operation(
+            kind: str, ceiling: str, tokens: str, budget_ms: int
+        ) -> ExecutionProfileConfig:
+            config = ExecutionProfileConfig(
+                profile_id=profile_id,
+                ceiling_ms=integer(f"{kind}_CEILING_MS", ceiling, 1_000, 18_000),
+                max_output_tokens=integer(f"{kind}_MAX_OUTPUT_TOKENS", tokens, 1, 4_096),
+                # Spending ceilings are deployment policy: required, never defaulted.
+                max_cost_microusd=integer(f"{kind}_MAX_COST_MICROUSD", None, 1, 1_000_000),
+            )
+            needed = config.ceiling_ms + 2 * prime.transit_allowance_ms + prime.prime_reserve_ms
+            if needed > budget_ms:
+                raise ConfigError(
+                    f"{prefix}{kind}_CEILING_MS plus transit and reserve exceeds {budget_ms} ms"
+                )
+            return config
+
+        digests = frozenset(
+            item.strip() for item in value("MATERIALS_ALLOWED_DIGESTS", None).split(",") if item
+        )
+        if not digests or not all(re.fullmatch(r"[a-f0-9]{64}", item) for item in digests):
+            raise ConfigError(f"{prefix}MATERIALS_ALLOWED_DIGESTS must be lowercase SHA-256 values")
+
+        return cls(
+            respond=operation("RESPOND", "6000", "1200", MEETING_RESPOND_BUDGET_MS),
+            draft=operation("DRAFT", "15000", "2500", MEETING_DRAFT_BUDGET_MS),
+            materials_path=value("MATERIALS_PATH", None),
+            materials_allowed_digests=digests,
+            idempotency_ttl_seconds=integer(
+                "IDEMPOTENCY_TTL_SECONDS", "300", 1, MAX_MEETING_IDEMPOTENCY_TTL_SECONDS
+            ),
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class Config:
     environment: Environment
@@ -234,6 +311,7 @@ class Config:
     knowledge_release_id: str
     answer_engine: AnswerEngineName = "legacy-bridge"
     homes_prime: HomesPrimeConfig | None = None
+    meeting: MeetingConfig | None = None
 
     @classmethod
     def from_environment(cls, environment: Mapping[str, str] | None = None) -> Config:
@@ -330,6 +408,17 @@ class Config:
                     f"{HOMES_PRIME_IN_PROGRESS_CEILING_SECONDS} for the homes-prime engine"
                 )
 
+        meeting_enabled = optional("MEETING_ENABLED", "false")
+        if meeting_enabled not in ("true", "false"):
+            raise ConfigError(f"{_ENV_PREFIX}MEETING_ENABLED must be 'true' or 'false'")
+        meeting: MeetingConfig | None = None
+        if meeting_enabled == "true":
+            # Meeting inference goes through Tiamat as the Homes Prime workload, so the meeting
+            # operations exist only where the (preview-only) homes-prime engine is configured.
+            if homes_prime is None:
+                raise ConfigError("the meeting operations require the homes-prime answer engine")
+            meeting = MeetingConfig.from_environment(env, prime=homes_prime)
+
         release_id_pattern = r"^[\x21-\x7e]{1,128}$"
         business_release_id = require("BUSINESS_RELEASE_ID")
         if not re.fullmatch(release_id_pattern, business_release_id):
@@ -355,6 +444,7 @@ class Config:
             knowledge_release_id=knowledge_release_id,
             answer_engine=answer_engine,  # type: ignore[arg-type]
             homes_prime=homes_prime,
+            meeting=meeting,
         )
 
     @staticmethod

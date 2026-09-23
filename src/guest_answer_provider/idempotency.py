@@ -111,10 +111,11 @@ class IdempotencyStore:
         """
         async with self._lock:
             now = self._now()
+            # Every expired record goes, not only this key's: a cached response (for the meeting
+            # operations, a Dragon answer or draft) must not outlive its replay window in memory.
+            for expired in [k for k, r in self._records.items() if r.ttl_deadline <= now]:
+                del self._records[expired]
             record = self._records.get(key)
-            if record is not None and record.ttl_deadline <= now:
-                del self._records[key]
-                record = None
 
             if record is None:
                 self._records[key] = _Record(
@@ -136,6 +137,9 @@ class IdempotencyStore:
                 still_eligible=record.response_snapshot_digest == current_snapshot_digest,
             )
             return decision
+
+    def __len__(self) -> int:
+        return len(self._records)
 
     async def get_replay_response(self, key: IdempotencyScopeKey) -> dict[str, object] | None:
         async with self._lock:

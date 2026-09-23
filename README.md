@@ -48,6 +48,12 @@ projection, deterministic grounding checks, a support-review pass, and a private
 bridge stays the default, and nothing has been deployed or run against a real provider. See
 `docs/homes-prime-stage2.md`.
 
+**Homes Dragon meeting operations (local only):** with the homes-prime engine,
+`GUEST_ANSWER_PROVIDER_MEETING_ENABLED=true` adds `GET /business/v1/meeting/identity` and
+`POST /business/v1/meeting/{respond,draft}` for Workspaces meetings, a capability separate from
+`guest.answer`, under the `meeting.assist` scope and Homes-approved, digest-pinned materials. See
+`docs/homes-dragon-meeting-operations.md`.
+
 ## Layout
 
 ```

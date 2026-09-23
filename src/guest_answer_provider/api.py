@@ -31,7 +31,12 @@ from guest_answer_provider import legacy_bridge, patterns, schema_validation
 from guest_answer_provider.auth import AuthenticationFailure, KeyAllowlist, authenticate
 from guest_answer_provider.bundle_tools import check_invariants_impl
 from guest_answer_provider.canonicalization import canonical_digest
-from guest_answer_provider.config import Config
+from guest_answer_provider.config import (
+    MEETING_DRAFT_BUDGET_MS,
+    MEETING_RESPOND_BUDGET_MS,
+    Config,
+    ExecutionProfileConfig,
+)
 from guest_answer_provider.errors import (
     ERROR_CLASSES,
     AnswerValidationFailedError,
@@ -62,6 +67,15 @@ from guest_answer_provider.logging_utils import (
     digest_idempotency_key,
     digest_session_id,
 )
+from guest_answer_provider.meeting import InvalidRequest as MeetingInvalidRequest
+from guest_answer_provider.meeting import MeetingEngine, MeetingError, NotFound, OperationSettings
+from guest_answer_provider.meeting import TemporarilyUnavailable as MeetingUnavailable
+from guest_answer_provider.meeting_api import (
+    is_meeting_path,
+    meeting_error_response,
+    register_meeting_routes,
+)
+from guest_answer_provider.meeting_materials import MaterialRegistry
 from guest_answer_provider.models import ErrorBodyV1, ErrorResponseV1, GuestAnswerResponseV1
 from guest_answer_provider.sme_client import (
     ExecutionIdentity,
@@ -265,6 +279,15 @@ def _load_homes_prime(config: Config) -> tuple[KnowledgeProjection, HomesPrimeSe
     return projection, settings
 
 
+def _profile_fields(profile: ExecutionProfileConfig) -> tuple[str, int, int, int]:
+    return (
+        profile.profile_id,
+        profile.ceiling_ms,
+        profile.max_output_tokens,
+        profile.max_cost_microusd,
+    )
+
+
 def create_app(
     *,
     config: Config,
@@ -273,9 +296,7 @@ def create_app(
     """`execution_transport` exists only so tests can route the private Shared Model Execution
     client to an in-process fake; runtime wiring always uses the default network transport."""
     allowlist = KeyAllowlist(config.jwt_keys)
-    homes_prime_parts = (
-        _load_homes_prime(config) if config.answer_engine == "homes-prime" else None
-    )
+    homes_prime_parts = _load_homes_prime(config) if config.answer_engine == "homes-prime" else None
     preview_mode_value = (
         HOMES_PRIME_PREVIEW_MODE_HEADER_VALUE
         if config.answer_engine == "homes-prime"
@@ -283,6 +304,15 @@ def create_app(
     )
     rate_limiter = _RateLimiter(config.rate_limit_per_minute)
     jti_replay_store = JtiReplayStore()
+    # Startup fails closed unless every meeting material matches its allowlisted manifest.
+    meeting_registry = (
+        MaterialRegistry.load(
+            Path(config.meeting.materials_path),
+            allowed_manifest_digests=config.meeting.materials_allowed_digests,
+        )
+        if config.meeting is not None
+        else None
+    )
     idempotency_store = IdempotencyStore(
         ttl_seconds=config.idempotency_ttl_seconds,
         in_progress_ceiling_seconds=config.idempotency_in_progress_ceiling_seconds,
@@ -310,17 +340,28 @@ def create_app(
         async with httpx.AsyncClient(
             transport=execution_transport, trust_env=False, follow_redirects=False
         ) as execution_http:
+            execution_client = SharedModelExecutionClient(
+                endpoint_url=prime.execution_url,
+                identity=identity,
+                http=execution_http,
+                transit_allowance_ms=settings.transit_allowance_ms,
+            )
             app.state.legacy_client = None
             app.state.homes_prime = HomesPrimeEngine(
-                settings=settings,
-                projection=projection,
-                client=SharedModelExecutionClient(
-                    endpoint_url=prime.execution_url,
-                    identity=identity,
-                    http=execution_http,
-                    transit_allowance_ms=settings.transit_allowance_ms,
-                ),
+                settings=settings, projection=projection, client=execution_client
             )
+            if config.meeting is not None:
+                app.state.meeting_engine = MeetingEngine(
+                    respond=OperationSettings(
+                        *_profile_fields(config.meeting.respond), MEETING_RESPOND_BUDGET_MS
+                    ),
+                    draft=OperationSettings(
+                        *_profile_fields(config.meeting.draft), MEETING_DRAFT_BUDGET_MS
+                    ),
+                    transit_allowance_ms=settings.transit_allowance_ms,
+                    reserve_ms=settings.prime_reserve_ms,
+                    client=execution_client,
+                )
             yield
 
     app = FastAPI(
@@ -345,8 +386,17 @@ def create_app(
     async def _handle_guest_answer_error(request: Request, exc: GuestAnswerError) -> JSONResponse:
         return _error_response(request, exc)
 
+    @app.exception_handler(MeetingError)
+    async def _handle_meeting_error(request: Request, exc: MeetingError) -> JSONResponse:
+        return meeting_error_response(request, exc)
+
     @app.exception_handler(StarletteHTTPException)
     async def _handle_http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        if config.meeting is not None and is_meeting_path(request.url.path):
+            if exc.status_code == 405:
+                return meeting_error_response(request, MeetingInvalidRequest())
+            if exc.status_code == 404:
+                return meeting_error_response(request, NotFound())
         if exc.status_code == 405:
             return _error_response(request, InvalidRequestError())
         return JSONResponse(
@@ -355,6 +405,8 @@ def create_app(
 
     @app.exception_handler(Exception)
     async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
+        if config.meeting is not None and is_meeting_path(request.url.path):
+            return meeting_error_response(request, MeetingUnavailable())
         return _error_response(request, TemporarilyUnavailableError())
 
     @app.get("/healthz")
@@ -521,6 +573,18 @@ def create_app(
 
         return _success_response(
             request, body=dumped, request_id=preflight.request_id, config=config
+        )
+
+    if config.meeting is not None:
+        assert meeting_registry is not None
+        meeting_limiter = _RateLimiter(config.rate_limit_per_minute)
+        register_meeting_routes(
+            app,
+            config=config,
+            allowlist=allowlist,
+            jti_replay_store=jti_replay_store,
+            registry=meeting_registry,
+            rate_limit=meeting_limiter.check,
         )
 
     async def _answer_with_homes_prime(

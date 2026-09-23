@@ -1,0 +1,22 @@
+{
+  "format_version": 1,
+  "notice": "Demo materials, pending Ray's approval. Items marked 'to confirm' are not approved Utopia policy.",
+  "materials": [
+    {
+      "id": "homes-owner-onboarding-brief-demo-v1",
+      "version": 1,
+      "kind": "brief",
+      "title": "Utopia Homes Owner Onboarding Brief — Demo v1",
+      "file": "homes-owner-onboarding-brief-demo-v1.md",
+      "sha256": "54c522fa53bf7ebd94f2938d5fcef5033c7331d6613c77ec717789e73592852b"
+    },
+    {
+      "id": "homes-owner-onboarding-checklist-demo-v1",
+      "version": 1,
+      "kind": "checklist",
+      "title": "Utopia Homes Owner Onboarding Checklist — Demo v1",
+      "file": "homes-owner-onboarding-checklist-demo-v1.md",
+      "sha256": "02e8cc0665ebce585c78d8df993fde1d3d8234269ab43bcc54dd7c6f548c3229"
+    }
+  ]
+}
