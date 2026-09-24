@@ -48,7 +48,10 @@ not be represented as, a conformant `guest.answer@1.0` provider.
   amount of traffic against this stage moves the needle on semantic quality. Don't collect staff
   feedback here expecting it to double as Tier B signal; it can't.
 
-Provision and traffic sequence for Stage 1 (still not executed — proposed only):
+Provision and traffic sequence for Stage 1 (still not executed — proposed only). Superseded on
+2026-09-24 by the Homes production cutover (`docs/production-cutover.md`), which deploys Homes
+Prime's own engine instead of the legacy bridge; the Stage 1 blueprint was replaced by
+`deploy/render/utopia-homes-prime.preview.yaml.example`.
 
 1. Deploy using `deploy/render/utopia-homes-guest-answer-provider.preview.yaml.example` (renamed
    to `render.yaml`), `GUEST_ANSWER_PROVIDER_ENVIRONMENT=preview`, and a JWT key allowlist

@@ -1,0 +1,72 @@
+# Review-only Render Blueprint for cutover gate C5: Utopia Homes Prime as a PREVIEW service on its
+# own route. It needs no Tiamat URL, key, grant, or service, no cloud-hermes-lucy image or database,
+# and no legacy Public Lucy endpoint.
+#
+# Nothing applies this automatically. Creating the service is a paid resource and needs Ray's
+# approval; secrets are entered in Render, never committed. After approval: rename to render.yaml
+# (or create the service by hand from these values), fill the `sync: false` secrets, and deploy.
+#
+# `environment: preview` is deliberate. Homes Prime refuses its own engine outside preview until the
+# production switch (gate C8) lifts that guard.
+
+services:
+  - type: web
+    name: utopia-homes-prime-preview
+    runtime: docker
+    repo: https://github.com/Utopiahomes/utopia-homes-prime
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    region: oregon
+    # RC2's initial profile is exactly one answer coordinator (volatile replay lives in its memory).
+    numInstances: 1
+    healthCheckPath: /healthz
+    autoDeployTrigger: "off"
+    envVars:
+      - key: GUEST_ANSWER_PROVIDER_ENVIRONMENT
+        value: preview
+      - key: GUEST_ANSWER_PROVIDER_ANSWER_ENGINE
+        value: homes-prime
+      - key: GUEST_ANSWER_PROVIDER_BUSINESS_RELEASE_ID
+        value: homes-business:release:preview.1
+      - key: GUEST_ANSWER_PROVIDER_RATE_LIMIT_PER_MINUTE
+        value: "120"
+      - key: GUEST_ANSWER_PROVIDER_LOG_LEVEL
+        value: INFO
+      # The website adapter's PUBLIC key only: a JSON array with one entry
+      # {kid, public_key_pem, environment: "preview", issuer: "stoin:application:utopia-homes-web",
+      #  subject: "stoin:service:utopia-homes-web-guest-adapter",
+      #  audience: "stoin:business:utopia-homes-prime", capabilities: ["guest.answer"]}.
+      # Its private half is set only in Vercel (HOMES_PRIME_GUEST_ANSWER_JWT_PRIVATE_KEY_PEM).
+      - key: GUEST_ANSWER_PROVIDER_JWT_PUBLIC_KEYS_JSON
+        sync: false
+      # Keyed digest for session IDs in content-free telemetry (RC2 §16): a random 32-byte hex value.
+      - key: GUEST_ANSWER_PROVIDER_SESSION_DIGEST_KEY
+        sync: false
+
+      # Homes' own inference route. The key's own OpenRouter spending limit is the hard cap.
+      - key: GUEST_ANSWER_PROVIDER_HOMES_PRIME_INFERENCE_BACKEND
+        value: direct-openrouter
+      - key: GUEST_ANSWER_PROVIDER_HOMES_PRIME_OPENROUTER_API_KEY
+        sync: false
+      - key: GUEST_ANSWER_PROVIDER_HOMES_PRIME_OPENROUTER_MODEL
+        value: google/gemini-3.1-flash-lite
+      - key: GUEST_ANSWER_PROVIDER_HOMES_PRIME_OPENROUTER_ALLOWED_PROVIDERS
+        value: google-vertex
+      - key: GUEST_ANSWER_PROVIDER_HOMES_PRIME_OPENROUTER_MAX_PROMPT_USD_PER_MILLION
+        value: "0.30"
+      - key: GUEST_ANSWER_PROVIDER_HOMES_PRIME_OPENROUTER_MAX_COMPLETION_USD_PER_MILLION
+        value: "1.80"
+      - key: GUEST_ANSWER_PROVIDER_HOMES_PRIME_GENERATE_MAX_COST_MICROUSD
+        value: "20000"
+      - key: GUEST_ANSWER_PROVIDER_HOMES_PRIME_REVIEW_MAX_COST_MICROUSD
+        value: "20000"
+
+      # Knowledge: exactly one recorded release, from `python tools/knowledge_release.py pin <id>`.
+      - key: GUEST_ANSWER_PROVIDER_KNOWLEDGE_RELEASE_ID
+        value: homes-knowledge:r1
+      - key: GUEST_ANSWER_PROVIDER_HOMES_PRIME_KNOWLEDGE_PATH
+        value: /app/knowledge/r1/utopia-public-knowledge.r1.json
+      - key: GUEST_ANSWER_PROVIDER_HOMES_PRIME_KNOWLEDGE_ALLOWED_DIGESTS
+        value: 95e2e20a9e4a3786e3daa63a73bb5ff2866b5bae295e6dc138bf432e4361c422
