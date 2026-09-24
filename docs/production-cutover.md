@@ -72,8 +72,10 @@ The first run exposed Homes-side problems, not model problems. Fixes:
 - **Answer policy.** A sentence naming a home must cite that home's evidence unless it only states
   a limitation, and no count or number may appear that the evidence does not state.
 
-The remaining failures are single, non-repeating fail-closed 503s. No run delivered a wrong answer
-to a guest:
+The remaining failures are single, non-repeating fail-closed 503s: none of them reached a guest as
+an answer. Passing turns met their written expectations; they were not otherwise fact-checked
+line by line.
+
 
 - The support reviewer (Flash-Lite) occasionally rejects text copied from the evidence.
 - The reviewer correctly caught "two options for four cars" (Central Ave has parking for 3).
