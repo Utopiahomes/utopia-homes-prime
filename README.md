@@ -7,7 +7,8 @@ Model Execution service, grant, credential, or network connection. Tiamat is one
 inference backend Homes may select. See `MIGRATION_PROVENANCE.md` for the 2026-09-24 source split
 from cloud-hermes-lucy.
 
-It serves two Homes business APIs:
+It also carries the Homes Management Contract provider, `utopia_homes_prime.management_adapter`,
+deployed as its own service (`docs/management-adapter.md`). It serves two Homes business APIs:
 
 - **`POST /business/v1/guest/answer`**, Business Contract `guest.answer@1.0` (RC2). Homes owns this
   contract: `docs/stoin-utopia-business-contract-guest-answer-rc2.md` and the Tier A conformance
@@ -52,6 +53,8 @@ src/utopia_homes_prime/
   guest_answer/                  RC2 types, schemas and errors; the Homes Prime engine
                                  (homes_prime.py); the legacy bridge
   meeting_assist/                Homes Dragon meeting operations, HTTP routes, materials registry
+  management_adapter/            Management Contract v1 provider (a separate deployable:
+                                 deploy/management-adapter/Dockerfile, tests/management/)
   knowledge/                     digest-pinned approved knowledge projection
   inference/                     backend seam (backend.py), direct route (direct_openrouter.py),
                                  optional Tiamat backend (tiamat.py, sme_client.py, sme_wire.py),

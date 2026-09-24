@@ -42,6 +42,28 @@ This is checked by `tests/integration/test_homes_without_tiamat.py`:
 | `tests/**/test_public_*`, `test_r1_*`, `test_evaluate_public_knowledge.py`, `test_validate_public_knowledge.py` | LEGACY | They test the legacy service; delete with it |
 | `docs/public-lucy-*.md`, `docs/evidence/utopia-public-*` | ARCHIVED | Historical evidence cited by commit; it stays in the historical repository |
 
+## Utopia Homes Management Contract provider (folded in)
+
+The standalone `utopia-homes-management-adapter` repository (`master`, `a292321`) is folded in as a
+separately deployable Homes component. Every file was copied byte-exact from that commit, with
+only import and path rewrites:
+
+| Standalone path | Here |
+| --- | --- |
+| `src/management_adapter/` | `src/utopia_homes_prime/management_adapter/` |
+| `tests/{unit,integration,contract}/`, `tests/conftest.py` | `tests/management/` (the same 205 tests, all passing) |
+| `tests/fixtures/{bundle,keys,tokens}.py` | `tests/fixtures/management/` |
+| `contracts/stoin-management-v1-bundle/` | unchanged path (digest `c3bc25e4…`, verified) |
+| `docs/management-contract-v1-rc3.md` | unchanged path |
+| `docs/implementation-notes.md`, `README.md` | `docs/management-adapter-implementation-notes.md`, `docs/management-adapter.md` |
+| `Dockerfile`, `.env.example` | `deploy/management-adapter/` (build context: repository root) |
+| `deploy/render/*.yaml.example` | unchanged paths; `dockerfilePath` updated |
+
+The Utopia-specific provider side of the Management Contract now lives with Homes Prime. Tiamat
+keeps its consumer side and a pinned compatibility reference. Any service already deployed from
+the standalone repository is unaffected until it is redeployed from here. Archive the standalone
+repository once nothing deploys from it.
+
 ## Removed from this repository during the split
 
 - `tools/generate_canonical_identity_fixtures.py` imported Tiamat source through `sys.path`. The

@@ -1,0 +1,68 @@
+# Review-only Render Blueprint fragment for the NON-PRODUCTION commissioning proof only.
+# Not applied automatically by anything in this repo. Provisioning, deployment, and credential
+# issuance remain explicit, separate, human-approved steps.
+#
+# Why `web` instead of `pserv`: Render private services are reachable only from other services
+# inside the same Render private network. Stoin Control's non-production commissioning run is
+# not (yet) co-located with Homes on Render's private network, so a private service would be
+# unreachable to it. This uses a public HTTPS `web` service instead — Render terminates TLS at
+# the edge automatically — and relies on the adapter's own JWT layer (§6) as the actual access
+# boundary, exactly as the deployed contract is designed to work over the open internet in the
+# first place. This is a staging-only tradeoff, not a relaxation of anything: the contract never
+# assumed network-level isolation was the security boundary; JWT + Ed25519 always was.
+#
+# Guardrails for this proof specifically:
+#   - `autoDeployTrigger: "off"` — nothing redeploys without an explicit action.
+#   - No database, no attached disk, no production environment group.
+#   - The smallest available paid plan, sized against a small aggregate spend ceiling for the
+#     life of the proof — confirm current Render pricing against that ceiling before applying;
+#     this file does not assert a specific dollar figure stays under it.
+#   - `MANAGEMENT_ADAPTER_JWT_PUBLIC_KEYS_JSON` is ephemeral, staging-only key material,
+#     provisioned out-of-band and torn down with the rest of this proof — never committed here,
+#     never reused for anything production.
+#   - Torn down (this service deleted, not just stopped) at the end of the commissioning proof
+#     per the deployment/rollback plan, not left running indefinitely.
+#
+# Rename to render.yaml and fill in the placeholders only when this specific staging deployment
+# is separately authorized.
+
+services:
+  - type: web
+    name: utopia-homes-management-adapter-staging
+    runtime: docker
+    dockerfilePath: ./deploy/management-adapter/Dockerfile
+    dockerContext: .
+    plan: starter
+    region: oregon
+    numInstances: 1
+    healthCheckPath: /healthz
+    autoDeployTrigger: "off"
+    envVars:
+      - key: MANAGEMENT_ADAPTER_ENVIRONMENT
+        value: staging
+      - key: MANAGEMENT_ADAPTER_DISPLAY_NAME
+        value: Utopia Homes Prime (staging)
+      - key: MANAGEMENT_ADAPTER_DEPLOYMENT_ID
+        value: stoin:deployment:utopia-homes-management:staging
+      - key: MANAGEMENT_ADAPTER_RUNTIME_ID
+        sync: false
+      - key: MANAGEMENT_ADAPTER_RELEASE_ID
+        sync: false
+      - key: MANAGEMENT_ADAPTER_SOFTWARE_VERSION
+        value: 0.1.0
+      - key: MANAGEMENT_ADAPTER_ARTIFACT_DIGEST
+        sync: false
+      - key: MANAGEMENT_ADAPTER_DEPLOYED_AT
+        sync: false
+      - key: MANAGEMENT_ADAPTER_MANAGED_SYNTH_OBSERVED_RELEASE_ID
+        sync: false
+      - key: MANAGEMENT_ADAPTER_CAPABILITIES_JSON
+        value: '[{"capability_id":"guest.answer","contract_version":"1.0","state":"enabled"}]'
+      # Ephemeral staging-only allowlist: {kid, public_key_pem, status}. Rotated/discarded with
+      # the rest of this proof's credentials, never the production key material.
+      - key: MANAGEMENT_ADAPTER_JWT_PUBLIC_KEYS_JSON
+        sync: false
+      - key: MANAGEMENT_ADAPTER_RATE_LIMIT_PER_MINUTE
+        value: "120"
+      - key: MANAGEMENT_ADAPTER_LOG_LEVEL
+        value: INFO

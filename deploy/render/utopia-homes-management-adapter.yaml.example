@@ -1,0 +1,58 @@
+# Review-only Render Blueprint fragment for the EVENTUAL shape of this service: a private
+# service (`pserv`), reachable only inside Render's private network, once Stoin Control is
+# deployed on the same private network and TLS-within-private-network is worked out. Not applied
+# automatically by anything in this repo, and not applied as part of the transitional-adapter
+# proof this repo currently delivers — provisioning, deployment, and credential issuance remain
+# explicit, separate, human-approved steps (Management Contract v1.0 §17: the adapter is
+# Homes-owned, independently released, and must never share a build or database with Stoin
+# Control or the utopia-homes-web Application).
+#
+# For the non-production commissioning proof (Control and Homes not yet co-located on a shared
+# private network), use utopia-homes-management-adapter.staging.yaml.example instead — a public
+# HTTPS `web` service protected by the JWT layer rather than network isolation.
+#
+# Rename to render.yaml and fill in the placeholders only when deployment is separately
+# authorized.
+
+services:
+  - type: pserv
+    name: utopia-homes-management-adapter
+    runtime: docker
+    dockerfilePath: ./deploy/management-adapter/Dockerfile
+    dockerContext: .
+    plan: starter
+    region: oregon
+    numInstances: 1
+    healthCheckPath: /healthz
+    autoDeployTrigger: "off"
+    envVars:
+      - key: MANAGEMENT_ADAPTER_ENVIRONMENT
+        value: production
+      - key: MANAGEMENT_ADAPTER_DISPLAY_NAME
+        value: Utopia Homes Prime
+      - key: MANAGEMENT_ADAPTER_DEPLOYMENT_ID
+        value: stoin:deployment:utopia-homes-management:production
+      # Opaque, unique per release; not a secret, but not a fixed literal either.
+      - key: MANAGEMENT_ADAPTER_RUNTIME_ID
+        sync: false
+      - key: MANAGEMENT_ADAPTER_RELEASE_ID
+        sync: false
+      - key: MANAGEMENT_ADAPTER_SOFTWARE_VERSION
+        value: 0.1.0
+      - key: MANAGEMENT_ADAPTER_ARTIFACT_DIGEST
+        sync: false
+      - key: MANAGEMENT_ADAPTER_DEPLOYED_AT
+        sync: false
+      # Present only once Homes Prime has an authoritative, content-free release observation.
+      - key: MANAGEMENT_ADAPTER_MANAGED_SYNTH_OBSERVED_RELEASE_ID
+        sync: false
+      - key: MANAGEMENT_ADAPTER_CAPABILITIES_JSON
+        value: '[{"capability_id":"guest.answer","contract_version":"1.0","state":"enabled"}]'
+      # JSON array of {kid, public_key_pem, status}. Provisioned out-of-band per §6; never
+      # committed to source control.
+      - key: MANAGEMENT_ADAPTER_JWT_PUBLIC_KEYS_JSON
+        sync: false
+      - key: MANAGEMENT_ADAPTER_RATE_LIMIT_PER_MINUTE
+        value: "120"
+      - key: MANAGEMENT_ADAPTER_LOG_LEVEL
+        value: INFO
