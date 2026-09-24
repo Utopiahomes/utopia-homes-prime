@@ -10,3 +10,8 @@ venv/
 htmlcov/
 .coverage
 .pytest-tmp/
+
+# Local credentials: never committed
+API Keys.txt
+*.key
+.secrets/

@@ -10,7 +10,7 @@ captured values, so a bug that made both sides wrong the same way would still be
 The vectors are pinned compatibility data for the optional Tiamat backend. Homes never imports
 Tiamat source: regenerating them is a Tiamat-side step that publishes new vectors (the original
 generator is at tools/generate_canonical_identity_fixtures.py in this repository's history, commit
-6267bbf).
+5090749, formerly 6267bbf).
 """
 
 from __future__ import annotations

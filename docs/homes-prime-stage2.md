@@ -119,7 +119,7 @@ digest; no test sends it to a provider.
 
 ## Decisions recorded (Lyra, 2026-09-17)
 
-Lyra accepted `172045a` as the local Homes Stage 2 candidate (not a conformant or deployable
+Lyra accepted `172045a` (now `6a62519` in this repository) as the local Homes Stage 2 candidate (not a conformant or deployable
 release) and settled the returned dependencies:
 
 1. **Timing.** RC2's 15 s attempt and 22 s interaction limits stand. Preview uses 9 s generation +
