@@ -115,7 +115,10 @@ recommendation and offer general destination help instead.
 
 For every Utopia-specific factual statement, create a business_claim segment and cite the exact
 supporting evidence IDs. Conversation, apologies, clarifying questions, and general guidance cite
-nothing and must not contain Utopia-specific facts. Use at most eight distinct evidence IDs.
+nothing and must not contain Utopia-specific facts. A sentence that names a Utopia home must
+cite that home's evidence, unless it only states what you cannot access or confirm. Never state a
+count, total, or other number that is not written in the cited evidence. Use at most eight
+distinct evidence IDs.
 Write display-ready plain text only: no Markdown, HTML, or URLs. Attach links only by choosing
 link_ids present in PUBLIC_CONTEXT. Keep the complete answer concise and useful.
 
@@ -129,7 +132,12 @@ identities, numbers, negations, dates, policies, restrictions, availability, com
 exceptions, and qualifications must follow from the cited approved evidence. Descriptions must be
 fairly supported by that evidence. Conversation, clarification, and general travel guidance need
 no citation but must not introduce Utopia-specific facts, local businesses, hours, distances, or
-endorsements. Return only JSON matching the supplied schema.
+endorsements.
+Judge each segment on its own words. A business claim is supported when its cited evidence states
+it; the visitor's question, premise, or requested date does not make a supported fact unsupported.
+A claim that restates its cited evidence is supported, whatever the question asked. Statements
+of what the assistant cannot access, confirm, or recommend, refusals, and polite redirections make
+no factual claim and are supported. Return only JSON matching the supplied schema.
 When uncertain about support, reject."""
 
 ANSWER_POLICY_DIGEST: Final = hashlib.sha256(ANSWER_POLICY.encode("utf-8")).hexdigest()
@@ -137,9 +145,20 @@ REVIEW_POLICY_DIGEST: Final = hashlib.sha256(REVIEW_POLICY.encode("utf-8")).hexd
 
 _DIGITS = re.compile(r"(?<![a-z0-9])\d+(?:\.\d+)?(?![a-z0-9])", re.IGNORECASE)
 _ACCESS_BOUNDARY = re.compile(
-    r"\b(?:i\s+)?(?:can(?:not|'t|’t)|do\s+not|don't|don’t)\s+(?:access|retrieve|provide|view|see)\b",
+    r"\b(?:i\s+|we\s+)?(?:can(?:not|'t|’t)|do\s+not|don't|don’t|(?:do\s+)?not\s+yet"
+    r"|(?:am\s+|are\s+|is\s+)?(?:unable|not\s+able)\s+to)\s+(?:\w+ly\s+)?"
+    r"(?:have\s+(?:access|(?:any\s+|the\s+|a\s+)?(?:information|details|approved|verified|"
+    r"specific|live|current))|access|retrieve|provide|view|see|confirm|verify|share)\b"
+    r"|\b(?:does\s+not|doesn't|doesn’t)\s+(?:\w+ly\s+)?(?:specify|include|mention|confirm|list)\b"
+    r"|\b(?:is\s+not|isn't|isn’t|not)\s+(?:listed|specified|included)\b",
     re.IGNORECASE,
 )
+"""A plain statement of what Homes cannot access, confirm, or find in its approved information. It
+makes no positive claim, so it may name a home when it carries no number."""
+
+_GENERALLY_APPLICABLE_KINDS: Final = frozenset({"policy", "navigation", "call_to_action"})
+"""General entries of these kinds (booking handoff, collection overview, contact) apply to every
+home, so a claim citing only them may name a home. General descriptions may not."""
 _MARKUP = re.compile(
     r"https?://|\bwww\.|\]\(|<\s*/?\s*[a-z][a-z0-9]*[^>]*>|```|\*\*|(?m:^\s{0,3}#{1,6}\s)",
     re.IGNORECASE,
@@ -335,13 +354,21 @@ def page_context_json(request: dict[str, Any], knowledge: EffectiveKnowledge) ->
 
 
 def build_generation_messages(
-    request: dict[str, Any], message_content: str, knowledge: EffectiveKnowledge
+    request: dict[str, Any],
+    message_content: str,
+    knowledge: EffectiveKnowledge,
+    *,
+    revision_note: str | None = None,
 ) -> tuple[ExecutionMessage, ...]:
     system = (
         f"{ANSWER_POLICY}\n\n"
         f"PAGE_CONTEXT={page_context_json(request, knowledge)}\n"
         f"PUBLIC_CONTEXT={knowledge.context_packet()}"
     )
+    if revision_note is not None:
+        # A fixed, Homes-authored note naming the rule the previous draft broke. It never carries
+        # the rejected draft's text.
+        system += f"\nREVISION_REQUIRED={revision_note}"
     messages = [ExecutionMessage("system", system)]
     # RC2 §9.1 history begins with user, alternates, and ends with assistant, so appending the
     # current message yields exactly RC1 §9.2's system/user/assistant/.../user ordering.
@@ -457,13 +484,18 @@ def validate_draft(
 
         mentioned = _mentioned_properties(text, markers)
         if kind != "business_claim":
-            if mentioned and "?" not in text and _ACCESS_BOUNDARY.search(text) is None:
+            limitation = _ACCESS_BOUNDARY.search(text) is not None and not numbers_in(text)
+            if mentioned and "?" not in text and not limitation:
                 raise AnswerRejected("property_statement_outside_evidence")
         else:
             # Every property the claim names must be supported by its own property record or be
             # named in the cited general evidence (e.g. a collection overview).
             cited_slugs = {entry.property_slug for entry in entries}
-            for slug in mentioned - cited_slugs:
+            generally_applicable = all(
+                entry.property_slug is None and entry.kind in _GENERALLY_APPLICABLE_KINDS
+                for entry in entries
+            )
+            for slug in set() if generally_applicable else mentioned - cited_slugs:
                 general_text = " ".join(
                     entry.approved_text for entry in entries if entry.property_slug is None
                 )
@@ -600,6 +632,39 @@ def guest_error_for_execution_failure(failure: InferenceFailure) -> GuestAnswerE
     return TemporarilyUnavailableError()
 
 
+# --- repair --------------------------------------------------------------------------------------
+
+REVISION_NOTES: Final = {
+    "property_statement_outside_evidence": (
+        "Your previous draft named a Utopia home in a sentence that cited none of that home's "
+        "evidence. Cite the home's evidence in that sentence, or leave the home's name out of it."
+    ),
+    "wrong_property": (
+        "Your previous draft named a Utopia home in a claim that did not cite that home's own "
+        "evidence. Cite each named home's own evidence, or leave that home out."
+    ),
+    "unsupported_number": (
+        "Your previous draft stated a number, count, or total that is not written in the cited "
+        "evidence. Use only numbers written in the evidence you cite."
+    ),
+    "uncited_business_claim": (
+        "Your previous draft made a Utopia-specific statement without citing evidence. Cite the "
+        "supporting evidence, or remove the statement."
+    ),
+    "markup_or_url_in_answer": (
+        "Your previous draft contained Markdown, HTML, or a URL. Write plain text only, and attach "
+        "links only through link_ids."
+    ),
+    "answer_length": "Your previous draft was too long or empty. Write a concise, complete answer.",
+    "too_much_evidence": "Your previous draft cited too many evidence IDs. Cite at most eight.",
+}
+"""RC2 §11 allows a bounded repair inside one answer pipeline. Only these deterministic Homes
+rejections are repaired, once; a support-review rejection is never repaired."""
+MAX_DRAFT_ATTEMPTS: Final = 2
+MIN_REPAIR_BUDGET_MS: Final = 3_000
+"""A repair starts only if at least this much of the generation budget remains."""
+
+
 # --- pipeline ------------------------------------------------------------------------------------
 
 
@@ -653,29 +718,49 @@ class HomesPrimeEngine:
             self.last_telemetry = PipelineTelemetry("knowledge", "unavailable")
             raise TemporarilyUnavailableError() from None
 
-        try:
-            generated = await self._backend.infer(
-                InferenceCall(
-                    route=settings.generate.profile_id,
-                    messages=build_generation_messages(request, message_content, knowledge),
-                    output=JsonSchemaOutput(DRAFT_SCHEMA_NAME, draft_schema(knowledge)),
-                    max_output_tokens=settings.generate.max_output_tokens,
-                    max_cost_microusd=settings.generate.max_cost_microusd,
-                    ceiling_ms=settings.generate.ceiling_ms,
-                ),
-                deadline=Deadline(attempt_end - review_budget_s),
-            )
-        except InferenceFailure as failure:
-            self.last_telemetry = PipelineTelemetry(
-                "generate", failure.code or failure.category, generate_attempts=failure.attempts
-            )
-            raise guest_error_for_execution_failure(failure) from None
+        generate_deadline = Deadline(attempt_end - review_budget_s)
+        revision_note: str | None = None
+        attempts = 0
+        while True:
+            attempts += 1
+            try:
+                generated = await self._backend.infer(
+                    InferenceCall(
+                        route=settings.generate.profile_id,
+                        messages=build_generation_messages(
+                            request, message_content, knowledge, revision_note=revision_note
+                        ),
+                        output=JsonSchemaOutput(DRAFT_SCHEMA_NAME, draft_schema(knowledge)),
+                        max_output_tokens=settings.generate.max_output_tokens,
+                        max_cost_microusd=settings.generate.max_cost_microusd,
+                        ceiling_ms=settings.generate.ceiling_ms,
+                    ),
+                    deadline=generate_deadline,
+                )
+            except InferenceFailure as failure:
+                self.last_telemetry = PipelineTelemetry(
+                    "generate", failure.code or failure.category, generate_attempts=attempts
+                )
+                raise guest_error_for_execution_failure(failure) from None
 
-        try:
-            draft = validate_draft(generated, message_content=message_content, knowledge=knowledge)
-        except AnswerRejected as rejection:
-            self.last_telemetry = PipelineTelemetry("validate", rejection.category)
-            raise AnswerValidationFailedError() from None
+            try:
+                draft = validate_draft(
+                    generated, message_content=message_content, knowledge=knowledge
+                )
+                break
+            except AnswerRejected as rejection:
+                self.last_telemetry = PipelineTelemetry(
+                    "validate", rejection.category, generate_attempts=attempts
+                )
+                repairable = rejection.category in REVISION_NOTES
+                budget_ms = generate_deadline.remaining_ms(self._monotonic())
+                if (
+                    not repairable
+                    or attempts >= MAX_DRAFT_ATTEMPTS
+                    or budget_ms < MIN_REPAIR_BUDGET_MS
+                ):
+                    raise AnswerValidationFailedError() from None
+                revision_note = REVISION_NOTES[rejection.category]
 
         # RC1 §18: never begin support review unless its complete ceiling still fits.
         review_deadline = Deadline(attempt_end)
@@ -716,5 +801,5 @@ class HomesPrimeEngine:
             self.last_telemetry = PipelineTelemetry("final_validation", rejection.category)
             raise AnswerValidationFailedError() from None
 
-        self.last_telemetry = PipelineTelemetry("complete", "answered")
+        self.last_telemetry = PipelineTelemetry("complete", "answered", generate_attempts=attempts)
         return body

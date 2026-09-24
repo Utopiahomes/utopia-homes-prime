@@ -117,14 +117,15 @@ def test_factually_false_candidate_is_rejected_before_review(stage2):
     invented = draft(
         ("business_claim", "Harbor Light welcomes up to 30 guests.", ["harbor-light-capacity"])
     )
-    stage2.fake.script(GENERATE, success(invented))
+    # One bounded repair is allowed, so the invented number is produced twice here.
+    stage2.fake.script(GENERATE, success(invented), success(invented))
     with TestClient(stage2.app) as client:
         response = _post(stage2, client)
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "answer_validation_failed"
     assert response.json()["error"]["retryable"] is False
     assert "Retry-After" not in response.headers
-    assert stage2.fake.dispatches == {GENERATE: 1}
+    assert stage2.fake.dispatches == {GENERATE: 2}
     # The rejected candidate never reaches the website (checked by phrase: random UUIDs in the
     # error body can legitimately contain the digits).
     assert "30 guests" not in response.text and "Harbor Light" not in response.text
@@ -383,3 +384,43 @@ def test_legacy_bridge_remains_the_default_engine(test_environment):
     assert config.answer_engine == "legacy-bridge"
     assert config.homes_prime is None
     assert json.loads(json.dumps(config.legacy_upstream.snapshot_digest))
+
+
+def test_a_rejected_draft_is_repaired_once_with_a_content_free_note(stage2):
+    invented = draft(
+        ("business_claim", "Harbor Light welcomes up to 30 guests.", ["harbor-light-capacity"])
+    )
+    stage2.fake.script(GENERATE, success(invented), success(HARBOR_CAPACITY_DRAFT))
+    stage2.fake.script(REVIEW, success(SUPPORTED))
+    with TestClient(stage2.app) as client:
+        response = _post(stage2, client)
+    assert response.status_code == 200, response.text
+    assert response.json()["answer"].startswith("Harbor Light welcomes up to 12 guests")
+    assert stage2.fake.dispatches == {GENERATE: 2, REVIEW: 1}
+    first, second = (a.document["messages"][0]["content"] for a in stage2.fake.attempts[:2])
+    assert "REVISION_REQUIRED" not in first
+    assert "REVISION_REQUIRED=Your previous draft stated a number" in second
+    assert "30 guests" not in second
+
+
+def test_a_support_review_rejection_is_never_repaired(stage2):
+    stage2.fake.script(GENERATE, success(HARBOR_CAPACITY_DRAFT))
+    stage2.fake.script(REVIEW, success(UNSUPPORTED))
+    with TestClient(stage2.app) as client:
+        response = _post(stage2, client)
+    assert response.json()["error"]["code"] == "answer_validation_failed"
+    assert stage2.fake.dispatches == {GENERATE: 1, REVIEW: 1}
+
+
+def test_no_repair_without_enough_budget(stage2, monkeypatch):
+    from utopia_homes_prime.guest_answer import homes_prime
+
+    monkeypatch.setattr(homes_prime, "MIN_REPAIR_BUDGET_MS", 60_000)
+    invented = draft(
+        ("business_claim", "Harbor Light welcomes up to 30 guests.", ["harbor-light-capacity"])
+    )
+    stage2.fake.script(GENERATE, success(invented))
+    with TestClient(stage2.app) as client:
+        response = _post(stage2, client)
+    assert response.json()["error"]["code"] == "answer_validation_failed"
+    assert stage2.fake.dispatches == {GENERATE: 1}

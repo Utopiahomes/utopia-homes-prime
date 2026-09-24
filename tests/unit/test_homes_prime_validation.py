@@ -372,3 +372,53 @@ def test_every_rc1_failure_maps_to_one_rc2_error(code):
     }.get(code, errors.TemporarilyUnavailableError)
     assert type(guest_error) is expected
     assert guest_error.code in {cls.code for cls in errors.ERROR_CLASSES}
+
+
+# --- limitation statements and generally applicable evidence (acceptance run, 2026-09-24) ---------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I do not have access to live calendars, so I cannot confirm whether Harbor Light is open.",
+        "The approved information for Harbor Light does not specify whether Wi-Fi is included.",
+        "I do not yet have a verified Utopia recommendation for pizza near Harbor Light.",
+        "My information does not specifically confirm whether Harbor Light has Wi-Fi.",
+        "I am unable to verify if Harbor Light offers Wi-Fi in the available details.",
+    ],
+)
+def test_a_plain_limitation_may_name_a_home(knowledge, text):
+    _validate(knowledge, draft(("conversation", text, [])))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Harbor Light has a heated pool.",  # a fact outside any evidence
+        "I cannot confirm availability, but Harbor Light sleeps 20 guests.",  # a number smuggled in
+    ],
+)
+def test_uncited_property_facts_are_still_rejected(knowledge, text):
+    with pytest.raises(AnswerRejected) as rejected:
+        _validate(knowledge, draft(("conversation", text, [])))
+    assert rejected.value.category == "property_statement_outside_evidence"
+
+
+def test_generally_applicable_evidence_may_name_a_home(knowledge):
+    text = "For Dune Cottage questions, visitors can reach Utopia through the contact page."
+    _validate(knowledge, draft(("business_claim", text, ["contact-utopia"])))
+
+
+def test_another_homes_facts_still_cannot_describe_a_home(knowledge):
+    with pytest.raises(AnswerRejected) as rejected:
+        _validate(
+            knowledge,
+            draft(
+                (
+                    "business_claim",
+                    "Dune Cottage welcomes up to 12 guests.",
+                    ["harbor-light-capacity"],
+                )
+            ),
+        )
+    assert rejected.value.category == "wrong_property"

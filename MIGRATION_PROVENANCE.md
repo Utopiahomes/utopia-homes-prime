@@ -109,9 +109,10 @@ The production cutover plan and its gates are in `docs/production-cutover.md`.
 2. **Real direct-route proof.** The no-Tiamat proof uses a fake provider. Answering a real guest
    question needs a Homes-owned OpenRouter key and price ceilings: a paid resource and a credential,
    so Ray decides.
-3. **`restricted_topic` gate.** Legacy `public_retrieval.restricted_topic` deterministically refused
-   restricted topics before any model call. Homes Prime relies on its answer policy plus its
-   validation checks. Porting that gate is a follow-up behavior change, not a move.
+3. **`restricted_topic` gate: resolved (C3), not ported.** Legacy `public_retrieval.restricted_topic`
+   ran only in the retrieval-only mode. The live model path never used it. Live pricing,
+   availability, and reservation-access requests are acceptance cases instead, and Homes Prime
+   declines them (see `docs/production-cutover.md`).
 4. **Contract text.** The agreed corrections (Tiamat execution optional in the Business Contract,
    caller independence in the SME contract, the Homes independence invariant in the Management
    Contract) follow the split as new revisions. RC2 is pinned by digest and is not edited in place.
