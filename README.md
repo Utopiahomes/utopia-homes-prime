@@ -1,90 +1,68 @@
-# Utopia Homes guest.answer Provider
+# Utopia Homes Prime
 
-An independently deployed Homes provider for **Business Contract `guest.answer@1.0`** (RC2, frozen
-commit `daf99943abf177f2209a6efb00e03c087bc542c6`), built against the frozen Tier A conformance
-bundle (digest `sha256:50492b998b393a25322cb9b76e4a8fbd7199905b8457450b8aa48ae00149ad4c`, 250
-checks / 218 files, no remaining acknowledged gaps). It exposes one authenticated HTTP resource —
-`POST /business/v1/guest/answer` — implementing the full RC2 protocol (EdDSA auth, idempotency,
-RFC 8785 canonicalization, the 13-row error contract) around the **existing, already-working**
-legacy FAQ-snapshot answer engine `utopia-homes-web` already calls — RC2 §20.2's strangler step 2:
-wrap the accepted current behavior, don't rebuild it.
+Utopia Homes Prime is the Homes business synth. Homes owns its knowledge, prompts, answer policy,
+validation, approved sources and links, fallback behavior, and the choice of how inference
+happens. It can be provisioned, run, and released with no Tiamat account, Control service, Shared
+Model Execution service, grant, credential, or network connection. Tiamat is one optional
+inference backend Homes may select. See `MIGRATION_PROVENANCE.md` for the 2026-09-24 source split
+from cloud-hermes-lucy.
 
-**Conformance status: preconformant compatibility stage only — not the conformant Homes Prime
-provider, and not eligible to enter Tier B evaluation as-is.** Wrapping the legacy answer engine
-proves the protocol boundary (auth, schemas, idempotency, retries, failure behavior, process
-separation, consumer compatibility); it cannot prove RC2 §§13-18 (grounding, precedence, model/
-knowledge requirements), because the legacy engine has no Homes-owned prompts, approved-knowledge
-grounding, or answer policy behind it. Becoming the conformant provider requires relocating those
-into this service and replacing the legacy delegation with a private, provider-neutral Shared
-Model Execution call — see `docs/guest-answer-preview-rollout.md` for the full two-stage plan and
-why the stages are distinct, not sequential phases of the same claim.
+It serves two Homes business APIs:
 
-Preconformant status is signaled out of band only — every response carries an
-`X-Utopia-Preview-Mode: legacy-bridge` diagnostic header (`api.py`), applied centrally so it can't
-be missed on any response path. It is never in the customer-visible `limitations[]` field: RC2
-§12.2 requires limitations to stay customer-relevant and explicitly prohibits revealing internal
-provider, prompt, policy, security, or infrastructure details there — an earlier version of this
-provider put it there, which was a real conformance bug, caught in Control-side review.
+- **`POST /business/v1/guest/answer`**, Business Contract `guest.answer@1.0` (RC2). Homes owns this
+  contract: `docs/stoin-utopia-business-contract-guest-answer-rc2.md` and the Tier A conformance
+  bundle `contracts/stoin-business-guest-answer-v1-bundle/` (digest
+  `sha256:50492b998b393a25322cb9b76e4a8fbd7199905b8457450b8aa48ae00149ad4c`) are authoritative
+  here.
+- **Homes Dragon meeting operations**: `GET /business/v1/meeting/identity` and
+  `POST /business/v1/meeting/{respond,draft}`. This is a separate `meeting.assist` capability for
+  Workspaces meetings, using Homes-approved, digest-pinned materials. See
+  `docs/homes-dragon-meeting-operations.md`.
 
-**Status: local conformance evidence only, not deployed.** This repo delivers source, tests, a
-Dockerfile, and a review-only Render Blueprint example — nothing here has been deployed, and no
-production credentials exist. See `docs/stoin-utopia-business-contract-guest-answer-rc2.md` for
-the full normative text and `docs/implementation-notes.md` for the judgment calls made where the
-contract intentionally leaves strangler-step answer sourcing, idempotency retention, and similar
-architectural choices open.
+Two answer engines exist, selected by `GUEST_ANSWER_PROVIDER_ANSWER_ENGINE`:
 
-This repo is intentionally standalone: it never imports from, or depends on, `cloud-hermes-lucy`,
-`utopia-homes-web`, or any Stoin Control repository. It calls the *same* legacy upstream endpoint
-`utopia-homes-web` already calls (same env-var-driven config, same wire shape), but as an
-independent process — Stoin Control stays completely outside this guest request path. The vendored
-conformance bundle under `contracts/` is the only shared artifact between this repo and the
-Control-side and website-consumer implementations, pinned by digest.
+- **`legacy-bridge`** (default) wraps the legacy FAQ-snapshot endpoint `utopia-homes-web` already
+  calls. That is RC2 §20.2's strangler step: **preconformant only**, not eligible for Tier B
+  evaluation. It is signaled out of band by `X-Utopia-Preview-Mode: legacy-bridge`, never in
+  customer-visible `limitations[]`. See `docs/guest-answer-preview-rollout.md`.
+- **`homes-prime`** (preview only) is the Homes-owned engine: prompts, a digest-pinned knowledge
+  projection, deterministic grounding checks, and a support-review pass. Inference goes through the
+  backend Homes selects with `GUEST_ANSWER_PROVIDER_HOMES_PRIME_INFERENCE_BACKEND`:
+  - `direct-openrouter`: Homes' own route (credential, model, price ceilings), needing nothing
+    from Tiamat;
+  - `tiamat`: optional, the private `inference.execute@1.0` client for Shared Model Execution (RC1,
+    pinned under `contracts/stoin-shared-model-execution-v1-rc1/`).
 
-**Stage 2 candidate (local only):** `GUEST_ANSWER_PROVIDER_ANSWER_ENGINE=homes-prime` switches this
-service to the Homes Prime engine: Homes-owned prompts, a digest-pinned approved knowledge
-projection, deterministic grounding checks, a support-review pass, and a private
-`inference.execute@1.0` client for Shared Model Execution (RC1, pinned under
-`contracts/stoin-shared-model-execution-v1-rc1/`). It is refused outside `preview`, the legacy
-bridge stays the default, and nothing has been deployed or run against a real provider. See
-`docs/homes-prime-stage2.md`.
+  See `docs/homes-prime-stage2.md`.
 
-**Homes Dragon meeting operations (local only):** with the homes-prime engine,
-`GUEST_ANSWER_PROVIDER_MEETING_ENABLED=true` adds `GET /business/v1/meeting/identity` and
-`POST /business/v1/meeting/{respond,draft}` for Workspaces meetings, a capability separate from
-`guest.answer`, under the `meeting.assist` scope and Homes-approved, digest-pinned materials. See
-`docs/homes-dragon-meeting-operations.md`.
+**Status: local only, not deployed.** No production credentials exist. No real provider call has
+run: the direct route is proven against a fake provider, and a real call needs a Homes-owned key and
+price ceilings (Ray's decision). `docs/implementation-notes.md` records judgment calls.
+
+This repository imports no other system's code. `tests/integration/test_homes_without_tiamat.py`
+enforces that, and proves guest.answer and the meeting operations with no Tiamat configuration.
 
 ## Layout
 
 ```
-src/utopia_homes_prime/    the service
-  config.py                    env vars -> frozen Config, including the legacy-upstream config
-  patterns.py                  format rules copied verbatim from the bundle's common.defs.json
-  bundle_tools.py               imports the vendored bundle's own check_invariants_impl.py directly
-  schema_validation.py         request/response/error validation against the vendored JSON Schema
-  models.py                    Pydantic response/error models (second line of defense)
-  errors.py                    the §17 error table as an exception hierarchy
-  auth.py                      stoin-business-jwt-v1 (Ed25519/EdDSA) verification, per-key
-                                environment/capability binding, jti replay
-  jti_replay.py                 in-memory jti replay rejection
-  canonicalization.py          RFC 8785 JCS + SHA-256 (via the same pinned `rfc8785` version
-                                Tier A itself validated)
-  idempotency.py                the I-B09 five-branch idempotency decision table
-  legacy_upstream.py            Python port of utopia-homes-web's askPublicLucy()
-  legacy_bridge.py              RC2 <-> legacy shape mapping (see implementation-notes.md)
-  logging_utils.py              §16-allowlisted structured access logging
-  api.py                        FastAPI app factory: the full request pipeline, error envelope
-  runtime.py                    process entrypoint (python -m utopia_homes_prime.runtime)
-tests/
-  unit/                        pure-function tests + full vendored-vector replay, no network
-  integration/                 FastAPI TestClient, in-process, header/transport/exchange vectors
-  contract/                    real OS-process + real HTTP + real fake-upstream HTTP server —
-                                the two-process (three, counting the fake upstream) proof
-contracts/stoin-business-guest-answer-v1-bundle/   vendored, digest-pinned conformance bundle
-docs/stoin-utopia-business-contract-guest-answer-rc2.md   reference copy of the normative text
-docs/implementation-notes.md   judgment-call log
-docs/guest-answer-preview-rollout.md   proposed (not executed) isolated-preview plan
-deploy/render/*.yaml.example   review-only Render Blueprint — never applied
+src/utopia_homes_prime/
+  config.py, runtime.py          env vars -> frozen Config; python -m utopia_homes_prime.runtime
+  business_api/                  FastAPI app factory and request pipeline, EdDSA JWT auth, jti
+                                 replay, idempotency, RFC 8785 canonicalization, access logging
+  guest_answer/                  RC2 types, schemas and errors; the Homes Prime engine
+                                 (homes_prime.py); the legacy bridge
+  meeting_assist/                Homes Dragon meeting operations, HTTP routes, materials registry
+  knowledge/                     digest-pinned approved knowledge projection
+  inference/                     backend seam (backend.py), direct route (direct_openrouter.py),
+                                 optional Tiamat backend (tiamat.py, sme_client.py, sme_wire.py),
+                                 backend-neutral structured output
+knowledge/                       Homes knowledge data: R1 corpus, legacy FAQ projection,
+                                 evaluation question sets
+materials/homes-dragon/          approved meeting materials and their pinned manifest
+contracts/                       guest.answer bundle (authoritative); pinned SME RC1 client data
+tests/unit, tests/integration, tests/contract
+docs/                            contracts, implementation notes, rollout and Stage 2 records
+deploy/render/*.yaml.example     review-only Render Blueprint, never applied
 ```
 
 ## Setup
@@ -110,8 +88,7 @@ pytest -m "not contract"   # fast — unit + integration, ~20s, includes full ve
 pytest -m contract         # spawns real subprocesses + a real fake-upstream HTTP server, ~20s
 ```
 
-All of the above pass locally as of this commit (191 tests total). CI runs the same sequence on
-every push via `.github/workflows/ci.yml`.
+All of the above pass locally. CI runs the same sequence via `.github/workflows/ci.yml`.
 
 ## Running it locally (non-production)
 

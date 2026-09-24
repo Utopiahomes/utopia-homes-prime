@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -128,15 +127,14 @@ def test_admitted_packet_is_bounded_at_the_rc1_enum_limit(tmp_path):
     )
 
 
-R1_PATH = os.environ.get("HOMES_PRIME_R1_CORPUS_PATH")
+R1_PATH = Path(__file__).resolve().parents[2] / "knowledge/r1/utopia-public-knowledge.r1.json"
 R1_APPROVED_DIGEST = "95e2e20a9e4a3786e3daa63a73bb5ff2866b5bae295e6dc138bf432e4361c422"
 
 
-@pytest.mark.skipif(not R1_PATH, reason="opt-in: set HOMES_PRIME_R1_CORPUS_PATH to the R1 corpus")
 def test_r1_approved_corpus_loads_under_its_approved_digest():
-    """Local R1 testing of the exact approved bytes only (approval dated 2026-09-12). The corpus is
-    read in place and never vendored; nothing here sends it to a provider."""
-    assert R1_PATH is not None
-    projection = _load(Path(R1_PATH), R1_APPROVED_DIGEST, release="r1-local-test")
+    """The Homes-owned R1 corpus (approved 2026-09-12; moved byte-exact from cloud-hermes-lucy
+    ba461b7). Local testing only: no test sends it to a provider, and a real-provider preview
+    still needs an explicitly authorized knowledge release."""
+    projection = _load(R1_PATH, R1_APPROVED_DIGEST, release="r1-local-test")
     effective = projection.effective(NOW)
     assert len(effective.entries_by_id) == 25

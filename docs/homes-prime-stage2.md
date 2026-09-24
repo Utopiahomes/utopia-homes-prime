@@ -106,15 +106,16 @@ still fits (RC1 §18). Defaults are 9 000 / 4 000 / 250 / 1 500 ms.
 | Pin | `tests/unit/test_sme_rc1_pin.py` | digests, extract identity, tamper detection, tables vs pinned text |
 | Wire | `tests/unit/test_sme_wire.py` | request construction, message rules, schema subset boundaries, success/error parsing negatives |
 | Client | `tests/unit/test_sme_client.py` | JWT/`req`, lost-response replay with one dispatch, rollout invalidation, retry budget, deadlines |
-| Knowledge | `tests/unit/test_knowledge.py` | digest pinning, effective time, withdrawal, destination approval; opt-in R1 corpus check |
+| Knowledge | `tests/unit/test_knowledge.py` | digest pinning, effective time, withdrawal, destination approval; the R1 corpus under its approved digest |
 | Grounding | `tests/unit/test_homes_prime_validation.py` | rejection categories, failure-mapping table, timing invariant |
 | API | `tests/integration/test_homes_prime_api.py` | end-to-end answers, final-answer rejection, failure mapping, deadlines, idempotent replay, rollout-lost-response, config guards |
 | Network | `tests/contract/test_homes_prime_live.py` | subprocess provider ↔ real TCP fake execution service, dropped connection, unreachable service |
 
 `tests/fixtures/fake_sme.py` verifies requests independently of `sme_wire.py` (hashlib/base64/PyJWT).
-All knowledge used in tests is a clearly labeled synthetic fixture. The Ray-approved R1 corpus is
-read in place only by the opt-in test (`HOMES_PRIME_R1_CORPUS_PATH`) and is never vendored or sent
-anywhere.
+All knowledge used in engine tests is a clearly labeled synthetic fixture. Since the 2026-09-24
+source split, the Ray-approved R1 corpus lives in this repository (`knowledge/r1/`, moved byte-exact
+from cloud-hermes-lucy because Homes owns its knowledge). One test loads it under its approved
+digest; no test sends it to a provider.
 
 ## Decisions recorded (Lyra, 2026-09-17)
 
