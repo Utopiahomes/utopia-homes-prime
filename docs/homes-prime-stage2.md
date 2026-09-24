@@ -37,9 +37,10 @@ website (unchanged) --guest.answer@1.0--> Homes Prime provider
 
 - The website still calls only `guest.answer@1.0`. No execution identifier, receipt, header,
   credential, or error code crosses into the RC2 response (asserted in integration tests).
-- Selected with `GUEST_ANSWER_PROVIDER_ANSWER_ENGINE=homes-prime`. The config **refuses this
-  engine unless `GUEST_ANSWER_PROVIDER_ENVIRONMENT=preview`**, so it cannot be activated by
-  accident. Responses carry `X-Utopia-Preview-Mode: homes-prime-candidate`.
+- Selected with `GUEST_ANSWER_PROVIDER_ANSWER_ENGINE=homes-prime`. Until 2026-09-24 the config
+  refused this engine outside `preview`. Ray approved production use at cutover gate C8, so it now
+  runs wherever it is selected explicitly; the legacy bridge stays the default. Responses still
+  carry `X-Utopia-Preview-Mode: homes-prime-candidate`, because no Tier B evaluation has run.
 - Stoin Control / the Tiamat management function is not in the request path.
 
 ## What Homes owns (moved into this service)

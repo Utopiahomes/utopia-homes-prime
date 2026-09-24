@@ -331,12 +331,17 @@ def test_oversized_evidence_packet_fails_closed_without_execution(tmp_path):
     assert stage.fake.attempts == []
 
 
-def test_homes_prime_engine_is_refused_outside_preview(tmp_path):
+def test_homes_prime_engine_runs_in_production_when_selected(tmp_path):
+    """C8 (Ray, 2026-09-24): Homes' own engine is approved for production. It still runs only
+    when selected explicitly; the legacy bridge stays the default."""
     harness = build_homes_prime_env(
         tmp_path, extra={"GUEST_ANSWER_PROVIDER_ENVIRONMENT": "production"}
     )
-    with pytest.raises(ConfigError, match="only in preview"):
-        Config.from_environment(harness.env)
+    config = Config.from_environment(harness.env)
+    assert (config.environment, config.answer_engine) == ("production", "homes-prime")
+    # Production never accepts a plain-HTTP Tiamat endpoint, loopback or not.
+    with pytest.raises(ValueError, match="HTTPS"):
+        create_app(config=config)
 
 
 @pytest.mark.parametrize(

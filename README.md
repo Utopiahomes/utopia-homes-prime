@@ -26,7 +26,7 @@ Two answer engines exist, selected by `GUEST_ANSWER_PROVIDER_ANSWER_ENGINE`:
   calls. That is RC2 §20.2's strangler step: **preconformant only**, not eligible for Tier B
   evaluation. It is signaled out of band by `X-Utopia-Preview-Mode: legacy-bridge`, never in
   customer-visible `limitations[]`. See `docs/guest-answer-preview-rollout.md`.
-- **`homes-prime`** (preview only) is the Homes-owned engine: prompts, a digest-pinned knowledge
+- **`homes-prime`** (approved for production on 2026-09-24; selected explicitly) is the Homes-owned engine: prompts, a digest-pinned knowledge
   projection, deterministic grounding checks, and a support-review pass. Inference goes through the
   backend Homes selects with `GUEST_ANSWER_PROVIDER_HOMES_PRIME_INFERENCE_BACKEND`:
   - `direct-openrouter`: Homes' own route (credential, model, price ceilings), needing nothing

@@ -18,8 +18,8 @@ or error bodies.
 | `POST /business/v1/meeting/respond` | One execution. Outcomes `answered`, `declined`, `unavailable`; execution or validation failure is an `unavailable` turn (HTTP 200), not an error |
 | `POST /business/v1/meeting/draft` | One execution. Failure is an error (`503 temporarily_unavailable` or `504 deadline_exceeded`) |
 
-Enabled with `GUEST_ANSWER_PROVIDER_MEETING_ENABLED=true`, only alongside the preview-only
-`homes-prime` engine. Otherwise the routes do not exist.
+Enabled with `GUEST_ANSWER_PROVIDER_MEETING_ENABLED=true`, only alongside the `homes-prime`
+engine. Otherwise the routes do not exist.
 
 ## Authentication
 

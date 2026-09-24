@@ -47,6 +47,9 @@ ISSUER = "stoin:application:homes-evaluation"
 SUBJECT = "stoin:service:homes-evaluation"
 AUDIENCE = "stoin:business:utopia-homes-prime"
 KID = "homes-evaluation-local"
+# Remote mode signs exactly as the website adapter does.
+WEB_ISSUER = "stoin:application:utopia-homes-web"
+WEB_SUBJECT = "stoin:service:utopia-homes-web-guest-adapter"
 
 
 def normalize(text: str) -> str:
@@ -169,12 +172,14 @@ def build_app(args: argparse.Namespace, recorder: Recorder) -> tuple[Any, Ed2551
     return create_app(config=Config.from_environment(env), execution_transport=recorder), signing
 
 
-def headers(signing: Ed25519PrivateKey) -> dict[str, str]:
+def headers(
+    signing: Ed25519PrivateKey, kid: str = KID, issuer: str = ISSUER, subject: str = SUBJECT
+) -> dict[str, str]:
     now = int(time.time())
     token = jwt.encode(
         {
-            "iss": ISSUER,
-            "sub": SUBJECT,
+            "iss": issuer,
+            "sub": subject,
             "aud": AUDIENCE,
             "scope": "guest.answer",
             "iat": now,
@@ -184,7 +189,7 @@ def headers(signing: Ed25519PrivateKey) -> dict[str, str]:
         },
         signing,
         algorithm="EdDSA",
-        headers={"kid": KID},
+        headers={"kid": kid},
     )
     return {
         "Authorization": f"Bearer {token}",
@@ -211,10 +216,33 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         for c in document["conversations"]
         if not args.only or any(re.search(p, c["id"]) for p in args.only)
     ]
-    recorder = Recorder()
-    app, signing = build_app(args, recorder)
     results = []
-    with TestClient(app) as client:
+    if args.url:
+        # A deployed Homes Prime, called over HTTPS exactly as the website calls it.
+        remote_key = serialization.load_pem_private_key(
+            args.signing_key.read_bytes(), password=None
+        )
+        assert isinstance(remote_key, Ed25519PrivateKey)
+        signing, kid, app, recorder = remote_key, args.kid, None, None
+        http = httpx.Client(timeout=30, follow_redirects=False)
+
+        def post(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+            reply = http.post(
+                args.url, json=body, headers=headers(signing, kid, WEB_ISSUER, WEB_SUBJECT)
+            )
+            return reply.status_code, reply.json()
+
+        context: Any = http
+    else:
+        recorder = Recorder()
+        app, signing = build_app(args, recorder)
+        context = TestClient(app)
+
+        def post(body: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+            reply = context.post("/business/v1/guest/answer", json=body, headers=headers(signing))
+            return reply.status_code, reply.json()
+
+    with context:
         for conversation in conversations:
             # One browser session per conversation; history entries carry their turn IDs.
             session_id = str(uuid.uuid4())
@@ -231,23 +259,20 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     body["history"] = bounded(history)
                 if turn["page_context"] is not None:
                     body["page_context"] = turn["page_context"]
-                before = len(recorder.calls)
+                before = len(recorder.calls) if recorder else 0
                 started = time.perf_counter()
-                response = client.post(
-                    "/business/v1/guest/answer", json=body, headers=headers(signing)
-                )
+                status, payload = post(body)
                 latency = time.perf_counter() - started
-                payload = response.json()
-                calls = recorder.calls[before:]
-                failures = score(turn, response.status_code, payload)
-                telemetry = app.state.homes_prime.last_telemetry
+                calls = recorder.calls[before:] if recorder else []
+                failures = score(turn, status, payload)
+                telemetry = app.state.homes_prime.last_telemetry if app else None
                 results.append(
                     {
                         "conversation": conversation["id"],
                         "category": conversation["category"],
                         "turn": index,
                         "message": turn["message"],
-                        "status": response.status_code,
+                        "status": status,
                         "outcome": payload.get("outcome"),
                         "answer": payload.get("answer"),
                         "sources": [s["source_id"] for s in payload.get("sources", [])],
@@ -267,7 +292,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     f"{mark} {conversation['id']}[{index}] {latency:.1f}s {'; '.join(failures)}",
                     flush=True,
                 )
-                if response.status_code != 200:
+                if status != 200:
                     break  # the conversation cannot continue without an answer
                 history += [
                     {"turn_id": turn_id, "role": "user", "content": turn["message"]},
@@ -285,6 +310,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     summary = {
         "model": args.model,
         "providers": args.providers,
+        "target": args.url or "in-process",
         "knowledge": document["knowledge"],
         "cases_sha256": hashlib.sha256(CASES.read_bytes()).hexdigest(),
         "run_at": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -305,17 +331,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--model", required=True)
+    parser.add_argument("--url", help="a deployed Homes Prime guest.answer URL (remote mode)")
+    parser.add_argument("--signing-key", type=Path, help="remote mode: the caller's Ed25519 PEM")
+    parser.add_argument("--kid", help="remote mode: the caller key's registered kid")
+    parser.add_argument("--model", help="in-process mode: the OpenRouter model")
     parser.add_argument(
         "--providers", default="", help="comma-separated OpenRouter provider allowlist"
     )
-    parser.add_argument(
-        "--prompt-price", type=float, required=True, help="USD per million input tokens ceiling"
-    )
+    parser.add_argument("--prompt-price", type=float, help="USD per million input tokens ceiling")
     parser.add_argument(
         "--completion-price",
         type=float,
-        required=True,
         help="USD per million output tokens ceiling",
     )
     parser.add_argument("--max-call-microusd", type=int, default=20_000)
@@ -323,11 +349,16 @@ def main() -> None:
     parser.add_argument("--only", nargs="*", help="regular expressions selecting conversation IDs")
     parser.add_argument("--out", type=Path, default=ROOT / "evaluation-results")
     args = parser.parse_args()
+    if args.url and not (args.signing_key and args.kid):
+        parser.error("--url needs --signing-key and --kid")
+    if not args.url and not (args.model and args.prompt_price and args.completion_price):
+        parser.error("in-process mode needs --model, --prompt-price and --completion-price")
 
     report = run(args)
     args.out.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    target = args.out / f"{args.model.replace('/', '_')}-{stamp}.json"
+    label = args.model.replace("/", "_") if args.model else "deployed"
+    target = args.out / f"{label}-{stamp}.json"
     target.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(report["summary"], indent=1))
     print(f"report: {target}")

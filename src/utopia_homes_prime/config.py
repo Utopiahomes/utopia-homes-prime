@@ -468,10 +468,8 @@ class Config:
                 env, provider_environment=provider_environment
             )
         else:
-            # The Stage 2 candidate has no activation approval: it may run only in preview, and
-            # the legacy path stays the unchanged default everywhere else.
-            if provider_environment != "preview":
-                raise ConfigError("the homes-prime answer engine is permitted only in preview")
+            # Production use was approved by Ray on 2026-09-24 (cutover gate C8). The legacy bridge
+            # remains the default engine, so homes-prime runs only where it is selected explicitly.
             homes_prime = HomesPrimeConfig.from_environment(env)
             # A pipeline may legitimately run for the full 15s attempt; an in-progress record must
             # not be declared unresolved while its only pipeline can still complete.
@@ -488,8 +486,8 @@ class Config:
             raise ConfigError(f"{_ENV_PREFIX}MEETING_ENABLED must be 'true' or 'false'")
         meeting: MeetingConfig | None = None
         if meeting_enabled == "true":
-            # Meeting inference goes through Tiamat as the Homes Prime workload, so the meeting
-            # operations exist only where the (preview-only) homes-prime engine is configured.
+            # Meeting inference goes through the Homes Prime engine's selected backend, so the
+            # meeting operations exist only where the homes-prime engine is configured.
             if homes_prime is None:
                 raise ConfigError("the meeting operations require the homes-prime answer engine")
             meeting = MeetingConfig.from_environment(env, prime=homes_prime)
