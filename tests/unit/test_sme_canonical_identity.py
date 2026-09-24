@@ -3,13 +3,14 @@
 
 The fixtures in tests/fixtures/sme_canonical_identity_vectors.json are NOT re-derived here with
 the same formula this module restates in its own docstring — they were captured by actually
-running Tiamat's unmodified function against a checkout of cloud-hermes-lucy-management-v1 (see
-tools/generate_canonical_identity_fixtures.py). This file only exercises this repo's own
-`sme_wire.canonical_identity()` and compares against those captured values, so a bug that made
-both sides wrong the same way would still be caught.
+running Tiamat's unmodified function against a checkout of cloud-hermes-lucy-management-v1. This
+file only exercises this repo's own `sme_wire.canonical_identity()` and compares against those
+captured values, so a bug that made both sides wrong the same way would still be caught.
 
-Regenerate the fixtures with:
-    python tools/generate_canonical_identity_fixtures.py <path-to-cloud-hermes-lucy-management-v1>
+The vectors are pinned compatibility data for the optional Tiamat backend. Homes never imports
+Tiamat source: regenerating them is a Tiamat-side step that publishes new vectors (the original
+generator is at tools/generate_canonical_identity_fixtures.py in this repository's history, commit
+6267bbf).
 """
 
 from __future__ import annotations
@@ -111,8 +112,8 @@ def test_fixtures_cover_json_schema_and_text_modes() -> None:
 
 def test_fixtures_are_pinned_to_a_named_tiamat_revision() -> None:
     """The fixtures aren't just a checked-in value with no provenance: the generation script
-    records exactly which cloud-hermes-lucy-management-v1 commit produced them (see
-    tools/generate_canonical_identity_fixtures.py), so parity can be re-verified against a named
+    records exactly which cloud-hermes-lucy-management-v1 commit produced them, so parity can be
+    re-verified against a named
     revision rather than an untraceable one. `tiamat_tree_dirty` is recorded rather than enforced
     here -- Homes' test suite can observe that Tiamat's working tree had uncommitted changes at
     generation time, but can't fix that from this side; it's surfaced for the regeneration record,

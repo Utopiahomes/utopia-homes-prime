@@ -41,6 +41,7 @@ from utopia_homes_prime.config import (
     MEETING_RESPOND_BUDGET_MS,
     Config,
     ExecutionProfileConfig,
+    HomesPrimeConfig,
 )
 from utopia_homes_prime.guest_answer import legacy_bridge, patterns, schema_validation
 from utopia_homes_prime.guest_answer.bundle_tools import check_invariants_impl
@@ -71,11 +72,17 @@ from utopia_homes_prime.guest_answer.models import (
     ErrorResponseV1,
     GuestAnswerResponseV1,
 )
+from utopia_homes_prime.inference.backend import InferenceBackend
+from utopia_homes_prime.inference.direct_openrouter import (
+    DirectOpenRouterBackend,
+    DirectProviderSettings,
+)
 from utopia_homes_prime.inference.sme_client import (
     ExecutionIdentity,
     SharedModelExecutionClient,
     validate_endpoint_url,
 )
+from utopia_homes_prime.inference.tiamat import TiamatBackend
 from utopia_homes_prime.knowledge.projection import KnowledgeProjection
 from utopia_homes_prime.meeting_assist.meeting import InvalidRequest as MeetingInvalidRequest
 from utopia_homes_prime.meeting_assist.meeting import (
@@ -277,7 +284,8 @@ def _load_homes_prime(config: Config) -> tuple[KnowledgeProjection, HomesPrimeSe
         transit_allowance_ms=prime.transit_allowance_ms,
         prime_reserve_ms=prime.prime_reserve_ms,
     )
-    validate_endpoint_url(prime.execution_url, allow_loopback_http=config.environment == "preview")
+    if prime.tiamat is not None:
+        validate_endpoint_url(prime.tiamat.url, allow_loopback_http=config.environment == "preview")
     projection = KnowledgeProjection.load(
         Path(prime.knowledge_path),
         release_id=config.knowledge_release_id,
@@ -297,12 +305,48 @@ def _profile_fields(profile: ExecutionProfileConfig) -> tuple[str, int, int, int
     )
 
 
+def _inference_backend(
+    prime: HomesPrimeConfig, http: httpx.AsyncClient, transit_allowance_ms: int
+) -> InferenceBackend:
+    """Homes selects its own backend. The direct route needs no Tiamat configuration at all."""
+    if prime.tiamat is None:
+        assert prime.direct is not None
+        direct = prime.direct
+        return DirectOpenRouterBackend(
+            settings=DirectProviderSettings(
+                api_key=direct.api_key,
+                model=direct.model,
+                allowed_providers=direct.allowed_providers,
+                max_prompt_usd_per_million=direct.max_prompt_usd_per_million,
+                max_completion_usd_per_million=direct.max_completion_usd_per_million,
+                referer=direct.referer,
+                transit_allowance_ms=transit_allowance_ms,
+            ),
+            http=http,
+        )
+    tiamat = prime.tiamat
+    identity = ExecutionIdentity.from_pem(
+        kid=tiamat.key_id,
+        issuer=tiamat.issuer,
+        subject=tiamat.subject,
+        private_key_pem=tiamat.private_key_pem,
+    )
+    return TiamatBackend(
+        SharedModelExecutionClient(
+            endpoint_url=tiamat.url,
+            identity=identity,
+            http=http,
+            transit_allowance_ms=transit_allowance_ms,
+        )
+    )
+
+
 def create_app(
     *,
     config: Config,
     execution_transport: httpx.AsyncBaseTransport | None = None,
 ) -> FastAPI:
-    """`execution_transport` exists only so tests can route the private Shared Model Execution
+    """`execution_transport` exists only so tests can route the selected inference backend
     client to an in-process fake; runtime wiring always uses the default network transport."""
     allowlist = KeyAllowlist(config.jwt_keys)
     homes_prime_parts = _load_homes_prime(config) if config.answer_engine == "homes-prime" else None
@@ -339,25 +383,14 @@ def create_app(
         prime = config.homes_prime
         assert prime is not None
         projection, settings = homes_prime_parts
-        identity = ExecutionIdentity.from_pem(
-            kid=prime.execution_key_id,
-            issuer=prime.execution_issuer,
-            subject=prime.execution_subject,
-            private_key_pem=prime.execution_private_key_pem,
-        )
-        # trust_env=False: no ambient proxy or netrc configuration can intercept the private call.
+        # trust_env=False: no ambient proxy or netrc configuration can intercept inference calls.
         async with httpx.AsyncClient(
             transport=execution_transport, trust_env=False, follow_redirects=False
-        ) as execution_http:
-            execution_client = SharedModelExecutionClient(
-                endpoint_url=prime.execution_url,
-                identity=identity,
-                http=execution_http,
-                transit_allowance_ms=settings.transit_allowance_ms,
-            )
+        ) as inference_http:
+            backend = _inference_backend(prime, inference_http, settings.transit_allowance_ms)
             app.state.legacy_client = None
             app.state.homes_prime = HomesPrimeEngine(
-                settings=settings, projection=projection, client=execution_client
+                settings=settings, projection=projection, backend=backend
             )
             if config.meeting is not None:
                 app.state.meeting_engine = MeetingEngine(
@@ -369,7 +402,7 @@ def create_app(
                     ),
                     transit_allowance_ms=settings.transit_allowance_ms,
                     reserve_ms=settings.prime_reserve_ms,
-                    client=execution_client,
+                    backend=backend,
                 )
             yield
 

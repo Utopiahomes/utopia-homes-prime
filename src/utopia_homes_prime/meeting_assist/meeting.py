@@ -5,9 +5,9 @@ turn, or drafts next steps from a bounded notes bundle, using only Homes-approve
 by exact (id, version). Conversation is input, never policy: the requester's role comes from
 Workspaces session metadata, and nothing said in the meeting grants access or changes the rules.
 
-Inference is one provider-neutral Shared Model Execution (Tiamat) call per operation, under one
-meeting execution profile, through the same private client the Homes Prime engine uses. Homes then
-enforces its own rules on the result deterministically.
+Inference is one call per operation through the backend Homes selected (inference/backend.py:
+Homes' own provider route, or optionally Tiamat Shared Model Execution under one meeting profile).
+Homes then enforces its own rules on the result deterministically.
 
 Retention: nothing here writes meeting content anywhere. Requests are processed in memory; the only
 thing kept after a response is the idempotency record (a digest of the request and the response,
@@ -27,13 +27,13 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from utopia_homes_prime.guest_answer import patterns
 from utopia_homes_prime.guest_answer.homes_prime import _MARKUP, numbers_in
-from utopia_homes_prime.inference import sme_wire
-from utopia_homes_prime.inference.sme_client import (
+from utopia_homes_prime.inference.backend import (
     Deadline,
-    ExecutionFailure,
-    SharedModelExecutionClient,
+    InferenceBackend,
+    InferenceCall,
+    InferenceFailure,
 )
-from utopia_homes_prime.inference.sme_wire import ExecutionMessage, JsonSchemaOutput
+from utopia_homes_prime.inference.structured_output import ExecutionMessage, JsonSchemaOutput
 from utopia_homes_prime.meeting_assist.meeting_materials import (
     MATERIAL_ID_MAX,
     MATERIALS_MAX,
@@ -50,9 +50,9 @@ CONTEXT_MAX_ITEMS: Final = 24
 CONTEXT_TOTAL_CHARS_MAX: Final = 12_000
 NOTES_MAX_ITEMS: Final = 2_000
 NOTES_TOTAL_CHARS_MAX: Final = 48_000
-"""Proposed down from the draft's 100,000: one Tiamat execution accepts at most 65,536 characters
-per message and 196,608 bytes in total (RC1 §9), and the notes must also fit the meeting
-profile's input-token limit alongside the policy and the materials."""
+"""Down from the draft's 100,000 so one inference can carry the notes with the policy and the
+materials under any backend: the Tiamat backend accepts at most 65,536 characters per message and
+196,608 bytes in total (RC1 §9), and every route has an input-token limit."""
 SPEAKER_MAX: Final = 120
 LINE_TEXT_MAX: Final = 4_000
 ANSWER_MAX: Final = 4_000
@@ -484,14 +484,14 @@ class MeetingEngine:
         draft: OperationSettings,
         transit_allowance_ms: int,
         reserve_ms: int,
-        client: SharedModelExecutionClient,
+        backend: InferenceBackend,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         self._respond = respond
         self._draft = draft
         self._transit_ms = transit_allowance_ms
         self._reserve_ms = reserve_ms
-        self._client = client
+        self._backend = backend
         self._monotonic = monotonic
         self.last_telemetry: MeetingTelemetry | None = None
 
@@ -503,32 +503,24 @@ class MeetingEngine:
         output: JsonSchemaOutput,
     ) -> dict[str, Any]:
         started = self._monotonic()
-        # Inputs inside the contract's bounds can still exceed one execution's bounds (for
-        # example non-ASCII text in bytes). That is the caller's request being too large; any
-        # other construction failure is a Homes defect and fails closed as unavailable.
-        encoded = [len(m.content.encode("utf-8")) for m in messages]
-        if sum(encoded) > sme_wire.MESSAGES_TOTAL_MAX_BYTES or any(
-            len(m.content) > sme_wire.MESSAGE_CONTENT_MAX_SCALARS for m in messages
-        ):
-            self.last_telemetry = MeetingTelemetry(operation, "prepare", "too_large")
-            raise RequestTooLarge()
-        try:
-            prepared = sme_wire.prepare_request(
-                execution_profile_id=settings.profile_id,
-                idempotency_key=str(uuid.uuid4()),
-                messages=messages,
-                output=output,
-                max_output_tokens=settings.max_output_tokens,
-                max_cost_microusd=settings.max_cost_microusd,
-            )
-        except sme_wire.WireViolation:
-            self.last_telemetry = MeetingTelemetry(operation, "prepare", "request_construction")
-            raise TemporarilyUnavailable() from None
-        deadline = Deadline(started + (settings.budget_ms - self._reserve_ms) / 1000)
-        result = await self._client.execute(
-            prepared, profile_ceiling_ms=settings.ceiling_ms, deadline=deadline
+        call = InferenceCall(
+            route=settings.profile_id,
+            messages=messages,
+            output=output,
+            max_output_tokens=settings.max_output_tokens,
+            max_cost_microusd=settings.max_cost_microusd,
+            ceiling_ms=settings.ceiling_ms,
         )
-        return result.content
+        deadline = Deadline(started + (settings.budget_ms - self._reserve_ms) / 1000)
+        try:
+            return await self._backend.infer(call, deadline=deadline)
+        except InferenceFailure as failure:
+            # Inputs inside the contract's bounds can still exceed what the selected backend
+            # accepts (for example non-ASCII text in bytes): the caller's request is too large.
+            if failure.category == "too_large":
+                self.last_telemetry = MeetingTelemetry(operation, "prepare", "too_large")
+                raise RequestTooLarge() from None
+            raise
 
     async def respond(
         self, request: RespondRequest, materials: tuple[Material, ...]
@@ -548,7 +540,7 @@ class MeetingEngine:
                 JsonSchemaOutput(RESPOND_SCHEMA_NAME, respond_schema(materials)),
             )
             reply = check_reply(content, request, materials)
-        except ExecutionFailure as failure:
+        except InferenceFailure as failure:
             self.last_telemetry = MeetingTelemetry(
                 "respond", "execute", failure.code or failure.category, failure.attempts
             )
@@ -568,7 +560,7 @@ class MeetingEngine:
                 JsonSchemaOutput(DRAFT_SCHEMA_NAME, draft_schema()),
             )
             draft = check_draft(content, request, materials)
-        except ExecutionFailure as failure:
+        except InferenceFailure as failure:
             self.last_telemetry = MeetingTelemetry(
                 "draft", "execute", failure.code or failure.category, failure.attempts
             )

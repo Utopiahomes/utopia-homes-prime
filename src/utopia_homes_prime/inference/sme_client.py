@@ -23,14 +23,14 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from utopia_homes_prime.inference import sme_wire
+from utopia_homes_prime.inference.backend import Deadline as Deadline
+from utopia_homes_prime.inference.backend import FailureCategory, InferenceFailure
 from utopia_homes_prime.inference.sme_wire import (
     ExecutionError,
     ExecutionSuccess,
     PreparedRequest,
     WireViolation,
 )
-
-FailureCategory = Literal["deadline", "rate_limited", "unsupported_output", "unavailable"]
 
 _UNSUPPORTED_OUTPUT_CODES = frozenset(
     {
@@ -44,23 +44,8 @@ RETRY_BACKOFF_MS = (250, 750)
 TOKEN_LIFETIME_SECONDS = 60
 
 
-class ExecutionFailure(Exception):
-    """A logical execution produced no usable candidate. Content-free by construction: it carries
-    only a category, the RC1 code (when the provider returned one), and optional receipts."""
-
-    def __init__(
-        self,
-        category: FailureCategory,
-        *,
-        code: str | None = None,
-        retry_after_seconds: int | None = None,
-        attempts: int = 0,
-    ) -> None:
-        super().__init__(f"{category}:{code or 'none'}")
-        self.category = category
-        self.code = code
-        self.retry_after_seconds = retry_after_seconds
-        self.attempts = attempts
+ExecutionFailure = InferenceFailure
+"""The Tiamat client raises the backend-neutral failure; this name is kept for RC1 readers."""
 
 
 def classify_error_code(code: str) -> FailureCategory:
@@ -91,16 +76,6 @@ class ExecutionIdentity:
         if not isinstance(loaded, Ed25519PrivateKey):
             raise ValueError("execution identity key must be Ed25519")
         return cls(kid=kid, issuer=issuer, subject=subject, private_key=loaded)
-
-
-@dataclass(frozen=True, slots=True)
-class Deadline:
-    """Absolute monotonic deadline in seconds."""
-
-    at: float
-
-    def remaining_ms(self, now: float) -> int:
-        return int((self.at - now) * 1000)
 
 
 def validate_endpoint_url(url: str, *, allow_loopback_http: bool) -> str:

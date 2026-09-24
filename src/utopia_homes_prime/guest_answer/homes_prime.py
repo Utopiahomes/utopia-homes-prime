@@ -3,15 +3,16 @@
 Homes owns everything that makes an answer a Utopia answer (RC2 §§5, 13-15; SME RC1 §2):
 the answer and review policies below, the approved knowledge projection (knowledge.py), context
 assembly, deterministic grounding checks, source/action selection from approved configuration,
-final validation, and the customer-facing error choice. Shared Model Execution only performs two
-bounded, provider-neutral inferences through the private `inference.execute@1.0` client:
+final validation, and the customer-facing error choice. The inference backend Homes selects
+(inference/backend.py: its own direct provider route, or optionally Tiamat Shared Model Execution)
+only performs two bounded inferences:
 
 1. `generate` — a structured draft whose every Utopia-specific claim cites approved evidence IDs;
 2. `support-review` — an independent check of the exact final displayed answer.
 
-Each is its own logical execution with its own Idempotency-Key and cost ceiling (RC1 §11). Homes
-never starts a replacement execution after a lost or invalidated result: a lost response during a
-profile rollout becomes a Homes-side error, not a second paid generation.
+Each is its own logical inference with its own cost ceiling. Homes never starts a replacement
+inference after a lost or invalidated result: that becomes a Homes-side error, not a second paid
+generation.
 
 Policy provenance: the answer and verification policies are relocated from the legacy Public Lucy
 model engine (cloud-hermes-lucy `lucy/public_model.py`) and adapted to RC2's outcome set, page
@@ -41,12 +42,13 @@ from utopia_homes_prime.guest_answer.errors import (
 )
 from utopia_homes_prime.guest_answer.models import ActionV1, GuestAnswerResponseV1, SourceV1
 from utopia_homes_prime.inference import sme_wire
-from utopia_homes_prime.inference.sme_client import (
+from utopia_homes_prime.inference.backend import (
     Deadline,
-    ExecutionFailure,
-    SharedModelExecutionClient,
+    InferenceBackend,
+    InferenceCall,
+    InferenceFailure,
 )
-from utopia_homes_prime.inference.sme_wire import ExecutionMessage, JsonSchemaOutput
+from utopia_homes_prime.inference.structured_output import ExecutionMessage, JsonSchemaOutput
 from utopia_homes_prime.knowledge.projection import (
     EffectiveKnowledge,
     KnowledgeEntry,
@@ -587,8 +589,8 @@ def assemble_response(
 # --- failure mapping -----------------------------------------------------------------------------
 
 
-def guest_error_for_execution_failure(failure: ExecutionFailure) -> GuestAnswerError:
-    """RC2 §17 is the only customer-facing error vocabulary. SME codes never cross this boundary."""
+def guest_error_for_execution_failure(failure: InferenceFailure) -> GuestAnswerError:
+    """RC2 §17 is the only customer-facing error vocabulary. Backend codes never cross it."""
     if failure.category == "deadline":
         return DeadlineExceededError()
     if failure.category == "rate_limited":
@@ -619,13 +621,13 @@ class HomesPrimeEngine:
         *,
         settings: HomesPrimeSettings,
         projection: KnowledgeProjection,
-        client: SharedModelExecutionClient,
+        backend: InferenceBackend,
         monotonic: Callable[[], float] = time.monotonic,
         wall_clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self._settings = settings
         self._projection = projection
-        self._client = client
+        self._backend = backend
         self._monotonic = monotonic
         self._wall_clock = wall_clock
         self._approved_destinations = projection.approved_destinations()
@@ -652,34 +654,25 @@ class HomesPrimeEngine:
             raise TemporarilyUnavailableError() from None
 
         try:
-            generation = sme_wire.prepare_request(
-                execution_profile_id=settings.generate.profile_id,
-                idempotency_key=str(uuid.uuid4()),
-                messages=build_generation_messages(request, message_content, knowledge),
-                output=JsonSchemaOutput(DRAFT_SCHEMA_NAME, draft_schema(knowledge)),
-                max_output_tokens=settings.generate.max_output_tokens,
-                max_cost_microusd=settings.generate.max_cost_microusd,
-            )
-        except sme_wire.WireViolation:
-            self.last_telemetry = PipelineTelemetry("generate", "request_construction")
-            raise TemporarilyUnavailableError() from None
-
-        try:
-            generated = await self._client.execute(
-                generation,
-                profile_ceiling_ms=settings.generate.ceiling_ms,
+            generated = await self._backend.infer(
+                InferenceCall(
+                    route=settings.generate.profile_id,
+                    messages=build_generation_messages(request, message_content, knowledge),
+                    output=JsonSchemaOutput(DRAFT_SCHEMA_NAME, draft_schema(knowledge)),
+                    max_output_tokens=settings.generate.max_output_tokens,
+                    max_cost_microusd=settings.generate.max_cost_microusd,
+                    ceiling_ms=settings.generate.ceiling_ms,
+                ),
                 deadline=Deadline(attempt_end - review_budget_s),
             )
-        except ExecutionFailure as failure:
+        except InferenceFailure as failure:
             self.last_telemetry = PipelineTelemetry(
                 "generate", failure.code or failure.category, generate_attempts=failure.attempts
             )
             raise guest_error_for_execution_failure(failure) from None
 
         try:
-            draft = validate_draft(
-                generated.content, message_content=message_content, knowledge=knowledge
-            )
+            draft = validate_draft(generated, message_content=message_content, knowledge=knowledge)
         except AnswerRejected as rejection:
             self.last_telemetry = PipelineTelemetry("validate", rejection.category)
             raise AnswerValidationFailedError() from None
@@ -693,30 +686,25 @@ class HomesPrimeEngine:
             raise DeadlineExceededError()
 
         try:
-            review = sme_wire.prepare_request(
-                execution_profile_id=settings.review.profile_id,
-                idempotency_key=str(uuid.uuid4()),
-                messages=build_review_messages(request, message_content, draft, knowledge),
-                output=JsonSchemaOutput(VERDICT_SCHEMA_NAME, verdict_schema()),
-                max_output_tokens=settings.review.max_output_tokens,
-                max_cost_microusd=settings.review.max_cost_microusd,
+            reviewed = await self._backend.infer(
+                InferenceCall(
+                    route=settings.review.profile_id,
+                    messages=build_review_messages(request, message_content, draft, knowledge),
+                    output=JsonSchemaOutput(VERDICT_SCHEMA_NAME, verdict_schema()),
+                    max_output_tokens=settings.review.max_output_tokens,
+                    max_cost_microusd=settings.review.max_cost_microusd,
+                    ceiling_ms=settings.review.ceiling_ms,
+                ),
+                deadline=review_deadline,
             )
-        except sme_wire.WireViolation:
-            self.last_telemetry = PipelineTelemetry("review", "request_construction")
-            raise TemporarilyUnavailableError() from None
-
-        try:
-            reviewed = await self._client.execute(
-                review, profile_ceiling_ms=settings.review.ceiling_ms, deadline=review_deadline
-            )
-        except ExecutionFailure as failure:
+        except InferenceFailure as failure:
             self.last_telemetry = PipelineTelemetry(
                 "review", failure.code or failure.category, review_attempts=failure.attempts
             )
             raise guest_error_for_execution_failure(failure) from None
 
         try:
-            validate_verdict(reviewed.content, segment_count=len(draft.segments))
+            validate_verdict(reviewed, segment_count=len(draft.segments))
             body = assemble_response(
                 request,
                 draft,

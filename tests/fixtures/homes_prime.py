@@ -77,6 +77,7 @@ def build_homes_prime_env(
     env.update(
         {
             "GUEST_ANSWER_PROVIDER_ANSWER_ENGINE": "homes-prime",
+            f"{prefix}INFERENCE_BACKEND": "tiamat",
             f"{prefix}EXECUTION_URL": execution_url,
             f"{prefix}EXECUTION_KEY_ID": "homes-prime-execution-test",
             f"{prefix}EXECUTION_ISSUER": EXECUTION_ISSUER,

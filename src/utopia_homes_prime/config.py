@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Final, Literal
 
@@ -123,16 +123,78 @@ class ExecutionProfileConfig:
     max_cost_microusd: int
 
 
+InferenceBackendName = Literal["direct-openrouter", "tiamat"]
+
+
+def _direct_provider(
+    require: Callable[[str], str], optional: Callable[[str, str], str], prefix: str
+) -> DirectProviderConfig:
+    api_key = require("OPENROUTER_API_KEY")
+    if not 20 <= len(api_key) <= 2_000:
+        raise ConfigError(f"{prefix}OPENROUTER_API_KEY is invalid")
+    model = require("OPENROUTER_MODEL")
+    if len(model) > 200 or model.startswith("~"):
+        raise ConfigError(f"{prefix}OPENROUTER_MODEL must be an exact public model identifier")
+    providers = tuple(
+        item.strip() for item in optional("OPENROUTER_ALLOWED_PROVIDERS", "").split(",") if item
+    )
+    if any(not item or len(item) > 100 for item in providers):
+        raise ConfigError(f"{prefix}OPENROUTER_ALLOWED_PROVIDERS is invalid")
+
+    def price(name: str) -> float:
+        try:
+            value = float(require(name))
+        except ValueError as exc:
+            raise ConfigError(f"{prefix}{name} must be a number") from exc
+        if not 0 < value < 1_000:
+            raise ConfigError(f"{prefix}{name} must be a positive USD-per-million price")
+        return value
+
+    return DirectProviderConfig(
+        api_key=api_key,
+        model=model,
+        allowed_providers=providers,
+        # Price ceilings are deployment policy: required, never defaulted.
+        max_prompt_usd_per_million=price("OPENROUTER_MAX_PROMPT_USD_PER_MILLION"),
+        max_completion_usd_per_million=price("OPENROUTER_MAX_COMPLETION_USD_PER_MILLION"),
+        referer=optional("OPENROUTER_REFERER", "https://www.utopiahomes.com"),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class TiamatExecutionConfig:
+    """Only for the optional `tiamat` backend. Issuer, key ID, registered key, and endpoint come
+    from Tiamat provisioning; Homes never requires them otherwise."""
+
+    url: str
+    key_id: str
+    issuer: str
+    subject: str
+    private_key_pem: str
+
+
+@dataclass(frozen=True, slots=True)
+class DirectProviderConfig:
+    """Homes' own provider route. The credential, model, and price ceilings are Homes deployment
+    policy; nothing here defaults a real one."""
+
+    api_key: str
+    model: str
+    allowed_providers: tuple[str, ...]
+    max_prompt_usd_per_million: float
+    max_completion_usd_per_million: float
+    referer: str
+
+
 @dataclass(frozen=True, slots=True)
 class HomesPrimeConfig:
-    """Stage 2 candidate engine settings. Every value that selects a provider route, credential, or
-    spending ceiling is Tiamat-provisioned deployment policy; nothing here defaults a real one."""
+    """Stage 2 candidate engine settings. Homes selects its inference backend explicitly; every
+    value that selects a provider route, credential, or spending ceiling is deployment policy, and
+    nothing here defaults a real one."""
 
-    execution_url: str
-    execution_key_id: str
-    execution_issuer: str
-    execution_subject: str
-    execution_private_key_pem: str
+    inference_backend: InferenceBackendName
+    direct: DirectProviderConfig | None
+    tiamat: TiamatExecutionConfig | None
     generate: ExecutionProfileConfig
     review: ExecutionProfileConfig
     transit_allowance_ms: int
@@ -199,16 +261,29 @@ class HomesPrimeConfig:
         if not hostnames or not all(_SITE_HOSTNAME_RE.fullmatch(host) for host in hostnames):
             raise ConfigError(f"{prefix}APPROVED_HOSTNAMES must list valid DNS hostnames")
 
-        private_key_pem = require("EXECUTION_PRIVATE_KEY_PEM")
-        if "BEGIN PRIVATE KEY" not in private_key_pem:
-            raise ConfigError(f"{prefix}EXECUTION_PRIVATE_KEY_PEM must be a PKCS#8 PEM key")
+        backend = require("INFERENCE_BACKEND")
+        if backend not in ("direct-openrouter", "tiamat"):
+            raise ConfigError(f"{prefix}INFERENCE_BACKEND must be 'direct-openrouter' or 'tiamat'")
+        direct: DirectProviderConfig | None = None
+        tiamat: TiamatExecutionConfig | None = None
+        if backend == "tiamat":
+            private_key_pem = require("EXECUTION_PRIVATE_KEY_PEM")
+            if "BEGIN PRIVATE KEY" not in private_key_pem:
+                raise ConfigError(f"{prefix}EXECUTION_PRIVATE_KEY_PEM must be a PKCS#8 PEM key")
+            tiamat = TiamatExecutionConfig(
+                url=require("EXECUTION_URL"),
+                key_id=require("EXECUTION_KEY_ID"),
+                issuer=require("EXECUTION_ISSUER"),
+                subject=optional("EXECUTION_SUBJECT", DEFAULT_EXECUTION_SUBJECT),
+                private_key_pem=private_key_pem,
+            )
+        else:
+            direct = _direct_provider(require, optional, prefix)
 
         return cls(
-            execution_url=require("EXECUTION_URL"),
-            execution_key_id=require("EXECUTION_KEY_ID"),
-            execution_issuer=require("EXECUTION_ISSUER"),
-            execution_subject=optional("EXECUTION_SUBJECT", DEFAULT_EXECUTION_SUBJECT),
-            execution_private_key_pem=private_key_pem,
+            inference_backend=backend,  # type: ignore[arg-type]
+            direct=direct,
+            tiamat=tiamat,
             generate=profile("GENERATE", DEFAULT_GENERATE_PROFILE_ID, "9000", "900"),
             review=profile("REVIEW", DEFAULT_REVIEW_PROFILE_ID, "4000", "300"),
             transit_allowance_ms=integer("TRANSIT_ALLOWANCE_MS", "250", 0, 5_000),
