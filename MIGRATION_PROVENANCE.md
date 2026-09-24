@@ -64,8 +64,8 @@ only import and path rewrites:
 
 The Utopia-specific provider side of the Management Contract now lives with Homes Prime. Tiamat
 keeps its consumer side and a pinned compatibility reference. Any service already deployed from
-the standalone repository is unaffected until it is redeployed from here. Archive the standalone
-repository once nothing deploys from it.
+the standalone repository is unaffected until it is redeployed from here. The standalone
+repository was archived on 2026-09-24; its staging service stays suspended.
 
 ## Removed from this repository during the split
 
