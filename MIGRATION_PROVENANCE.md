@@ -101,6 +101,8 @@ there, and to this repository through this table.
 
 ## Open items (not part of the source split)
 
+The production cutover plan and its gates are in `docs/production-cutover.md`.
+
 1. **Website cutover.** `utopia-homes-web` still calls the legacy `/api/lucy` → Public Lucy path
    (`LUCY_PUBLIC_API_URL`). Once the website calls this service's Business API, the legacy service
    files above can be deleted and cloud-hermes-lucy archived.
