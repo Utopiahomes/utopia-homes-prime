@@ -514,6 +514,20 @@ C += [
         ],
     ),
     conv(
+        "requirements-30-with-dog",
+        "comparison",
+        "a compound fit question picks the only home and keeps the pet policy",
+        [
+            turn(
+                "Which home is best for 30 people, and can we bring a dog?",
+                ANSWER_OR_PARTIAL,
+                groups=[["Shamrock"], ["32"], ["dog"]],
+                sources=["shamrock-page"],
+                forbid=["Buttercup Beauty fits", "Central Ave fits"],
+            )
+        ],
+    ),
+    conv(
         "requirements-40-people",
         "comparison",
         "no match is stated plainly",
@@ -994,5 +1008,6 @@ document = {
     "Source IDs are the knowledge source IDs, namespaced public-source: in the response.",
     "conversations": C,
 }
-OUT.write_text(json.dumps(document, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+# Written as bytes so the output has LF line endings on every platform.
+OUT.write_bytes((json.dumps(document, ensure_ascii=False, indent=1) + "\n").encode("utf-8"))
 print(len(C), "conversations,", sum(len(c["turns"]) for c in C), "turns")

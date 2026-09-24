@@ -23,6 +23,11 @@ RUN pip install --no-cache-dir --no-deps -e .
 # just a dev-time artifact — it must ship in the image.
 COPY contracts ./contracts
 
+# Homes-owned runtime data: approved knowledge releases (pinned by digest through the environment;
+# see tools/knowledge_release.py pin) and the approved meeting materials with their manifest.
+COPY knowledge ./knowledge
+COPY materials ./materials
+
 USER 10001:10001
 EXPOSE 8081
 

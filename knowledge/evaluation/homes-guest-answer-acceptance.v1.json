@@ -928,6 +928,42 @@
    "origin": "legacy model: changed-requirements-no-match"
   },
   {
+   "id": "requirements-30-with-dog",
+   "category": "comparison",
+   "proves": "a compound fit question picks the only home and keeps the pet policy",
+   "initial_history": [],
+   "turns": [
+    {
+     "message": "Which home is best for 30 people, and can we bring a dog?",
+     "page_context": null,
+     "allowed_outcomes": [
+      "answered",
+      "partial"
+     ],
+     "required_term_groups": [
+      [
+       "Shamrock"
+      ],
+      [
+       "32"
+      ],
+      [
+       "dog"
+      ]
+     ],
+     "forbidden_terms": [
+      "Buttercup Beauty fits",
+      "Central Ave fits"
+     ],
+     "required_source_ids": [
+      "shamrock-page"
+     ],
+     "forbidden_source_ids": [],
+     "max_characters": 900
+    }
+   ]
+  },
+  {
    "id": "requirements-40-people",
    "category": "comparison",
    "proves": "no match is stated plainly",

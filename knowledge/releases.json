@@ -1,0 +1,14 @@
+{
+ "schema": "utopia-homes-knowledge-releases-v1",
+ "releases": [
+  {
+   "release_id": "homes-knowledge:r1",
+   "file": "knowledge/r1/utopia-public-knowledge.r1.json",
+   "canonical_digest": "95e2e20a9e4a3786e3daa63a73bb5ff2866b5bae295e6dc138bf432e4361c422",
+   "file_sha256": "0e61afcaf8797014c9fbc0e11e9652daa7965772852e0c9539f04a72668e8a4b",
+   "approved_by": "Ray",
+   "approved_on": "2026-09-12",
+   "note": "Approved R1 corpus, moved byte-exact from cloud-hermes-lucy ba461b7. Ray authorized it for real-provider testing on 2026-09-24. Serving it in production is part of the cutover approval (C8)."
+  }
+ ]
+}

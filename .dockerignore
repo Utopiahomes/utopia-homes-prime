@@ -15,3 +15,9 @@ deploy
 *.egg-info
 htmlcov
 .coverage
+# Local credentials and local reports never enter a build context.
+API Keys.txt
+*.key
+.secrets
+evaluation-results
+tools
