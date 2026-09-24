@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from guest_answer_provider.sme_wire import (
+from utopia_homes_prime.inference.sme_wire import (
     ExecutionMessage,
     JsonSchemaOutput,
     PreparedRequest,

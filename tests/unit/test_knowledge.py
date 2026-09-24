@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from fixtures.homes_knowledge import synthetic_corpus, write_synthetic_corpus
 
-from guest_answer_provider.knowledge import (
+from utopia_homes_prime.knowledge.projection import (
     KnowledgeProjection,
     KnowledgeUnavailable,
     canonical_corpus_digest,
@@ -106,8 +106,8 @@ def test_admitted_packet_is_bounded_at_the_rc1_enum_limit(tmp_path):
     drop the schema enum. The synthetic corpus has one expired entry, so N+1 entries admit N."""
     from fixtures.homes_knowledge import padded_corpus, write_corpus
 
-    from guest_answer_provider import sme_wire
-    from guest_answer_provider.knowledge import MAX_ADMITTED_IDS
+    from utopia_homes_prime.inference import sme_wire
+    from utopia_homes_prime.knowledge.projection import MAX_ADMITTED_IDS
 
     assert MAX_ADMITTED_IDS == sme_wire.SCHEMA_MAX_ENUM_MEMBERS == 64
 

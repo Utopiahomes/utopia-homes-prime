@@ -98,7 +98,7 @@ def _spawn(harness: HomesPrimeHarness) -> Iterator[str]:
     env.update(harness.env)
     env["PORT"] = str(port)
     process = subprocess.Popen(
-        [sys.executable, "-m", "guest_answer_provider.runtime"],
+        [sys.executable, "-m", "utopia_homes_prime.runtime"],
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,

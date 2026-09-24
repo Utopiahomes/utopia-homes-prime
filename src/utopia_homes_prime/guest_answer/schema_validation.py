@@ -16,7 +16,7 @@ from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
 _BUNDLE = (
-    Path(__file__).resolve().parent.parent.parent
+    Path(__file__).resolve().parent.parent.parent.parent
     / "contracts"
     / "stoin-business-guest-answer-v1-bundle"
 )

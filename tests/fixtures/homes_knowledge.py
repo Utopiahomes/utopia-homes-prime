@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from guest_answer_provider.knowledge import canonical_corpus_digest
+from utopia_homes_prime.knowledge.projection import canonical_corpus_digest
 
 HOST = "https://www.utopiahomes.com"
 EFFECTIVE = "2026-01-01T00:00:00Z"

@@ -11,10 +11,19 @@ import json
 import httpx
 import pytest
 
-from guest_answer_provider.config import LegacyUpstreamConfig
-from guest_answer_provider.errors import AnswerValidationFailedError, TemporarilyUnavailableError
-from guest_answer_provider.legacy_bridge import answer_via_legacy, content_to_legacy_question
-from guest_answer_provider.legacy_upstream import LegacyUpstreamUnavailable, ask_legacy_lucy
+from utopia_homes_prime.config import LegacyUpstreamConfig
+from utopia_homes_prime.guest_answer.errors import (
+    AnswerValidationFailedError,
+    TemporarilyUnavailableError,
+)
+from utopia_homes_prime.guest_answer.legacy_bridge import (
+    answer_via_legacy,
+    content_to_legacy_question,
+)
+from utopia_homes_prime.guest_answer.legacy_upstream import (
+    LegacyUpstreamUnavailable,
+    ask_legacy_lucy,
+)
 
 SNAPSHOT_DIGEST = "a" * 64
 CONFIG = LegacyUpstreamConfig(

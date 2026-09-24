@@ -8,7 +8,7 @@ import shutil
 import pytest
 from fixtures.meeting import BRIEF, CHECKLIST, MANIFEST, manifest_digest
 
-from guest_answer_provider.meeting_materials import (
+from utopia_homes_prime.meeting_assist.meeting_materials import (
     MaterialNotPermitted,
     MaterialRegistry,
     MaterialsUnavailable,

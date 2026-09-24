@@ -57,7 +57,7 @@ bridge stays the default, and nothing has been deployed or run against a real pr
 ## Layout
 
 ```
-src/guest_answer_provider/    the service
+src/utopia_homes_prime/    the service
   config.py                    env vars -> frozen Config, including the legacy-upstream config
   patterns.py                  format rules copied verbatim from the bundle's common.defs.json
   bundle_tools.py               imports the vendored bundle's own check_invariants_impl.py directly
@@ -74,7 +74,7 @@ src/guest_answer_provider/    the service
   legacy_bridge.py              RC2 <-> legacy shape mapping (see implementation-notes.md)
   logging_utils.py              §16-allowlisted structured access logging
   api.py                        FastAPI app factory: the full request pipeline, error envelope
-  runtime.py                    process entrypoint (python -m guest_answer_provider.runtime)
+  runtime.py                    process entrypoint (python -m utopia_homes_prime.runtime)
 tests/
   unit/                        pure-function tests + full vendored-vector replay, no network
   integration/                 FastAPI TestClient, in-process, header/transport/exchange vectors
@@ -117,7 +117,7 @@ every push via `.github/workflows/ci.yml`.
 
 The provider needs a JWT public-key allowlist and the legacy-upstream config, supplied entirely
 through environment variables — see `.env.example` for the full list and
-`src/guest_answer_provider/config.py` for validation rules.
+`src/utopia_homes_prime/config.py` for validation rules.
 
 1. Generate a throwaway Ed25519 keypair and a matching signed JWT for testing:
 
@@ -173,7 +173,7 @@ through environment variables — see `.env.example` for the full list and
 3. Run the provider:
 
    ```bash
-   python -m guest_answer_provider.runtime
+   python -m utopia_homes_prime.runtime
    ```
 
 4. In another shell, using the `TEST_JWT` printed in step 1:

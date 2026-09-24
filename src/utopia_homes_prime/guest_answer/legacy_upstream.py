@@ -13,7 +13,7 @@ from __future__ import annotations
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from guest_answer_provider.config import LegacyUpstreamConfig
+from utopia_homes_prime.config import LegacyUpstreamConfig
 
 DEFAULT_TIMEOUT_SECONDS = 10.0
 

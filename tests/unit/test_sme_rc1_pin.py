@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from guest_answer_provider import sme_wire
+from utopia_homes_prime.inference import sme_wire
 
 PIN_DIR = Path(__file__).resolve().parents[2] / "contracts" / "stoin-shared-model-execution-v1-rc1"
 CONTRACT = PIN_DIR / "docs" / "stoin-shared-model-execution-contract-v1-rc1.md"

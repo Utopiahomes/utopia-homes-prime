@@ -25,11 +25,20 @@ from typing import Annotated, Any, ClassVar, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from guest_answer_provider import patterns, sme_wire
-from guest_answer_provider.homes_prime import _MARKUP, numbers_in
-from guest_answer_provider.meeting_materials import MATERIAL_ID_MAX, MATERIALS_MAX, Material
-from guest_answer_provider.sme_client import Deadline, ExecutionFailure, SharedModelExecutionClient
-from guest_answer_provider.sme_wire import ExecutionMessage, JsonSchemaOutput
+from utopia_homes_prime.guest_answer import patterns
+from utopia_homes_prime.guest_answer.homes_prime import _MARKUP, numbers_in
+from utopia_homes_prime.inference import sme_wire
+from utopia_homes_prime.inference.sme_client import (
+    Deadline,
+    ExecutionFailure,
+    SharedModelExecutionClient,
+)
+from utopia_homes_prime.inference.sme_wire import ExecutionMessage, JsonSchemaOutput
+from utopia_homes_prime.meeting_assist.meeting_materials import (
+    MATERIAL_ID_MAX,
+    MATERIALS_MAX,
+    Material,
+)
 
 CONTRACT_VERSION: Final = "1.0"
 SYNTH_ID: Final = "stoin:synth:utopia-homes-prime"

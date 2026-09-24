@@ -21,10 +21,16 @@ from __future__ import annotations
 
 import httpx
 
-from guest_answer_provider.config import LegacyUpstreamConfig
-from guest_answer_provider.errors import AnswerValidationFailedError, TemporarilyUnavailableError
-from guest_answer_provider.legacy_upstream import LegacyUpstreamUnavailable, ask_legacy_lucy
-from guest_answer_provider.patterns import ANSWER_TEXT_MAX, ANSWER_TEXT_MIN
+from utopia_homes_prime.config import LegacyUpstreamConfig
+from utopia_homes_prime.guest_answer.errors import (
+    AnswerValidationFailedError,
+    TemporarilyUnavailableError,
+)
+from utopia_homes_prime.guest_answer.legacy_upstream import (
+    LegacyUpstreamUnavailable,
+    ask_legacy_lucy,
+)
+from utopia_homes_prime.guest_answer.patterns import ANSWER_TEXT_MAX, ANSWER_TEXT_MIN
 
 LEGACY_QUESTION_MIN = 2
 LEGACY_QUESTION_MAX = 500

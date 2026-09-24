@@ -30,28 +30,29 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Final, Literal
 
-from guest_answer_provider import patterns, schema_validation, sme_wire
-from guest_answer_provider.bundle_tools import check_invariants_impl
-from guest_answer_provider.errors import (
+from utopia_homes_prime.guest_answer import patterns, schema_validation
+from utopia_homes_prime.guest_answer.bundle_tools import check_invariants_impl
+from utopia_homes_prime.guest_answer.errors import (
     AnswerValidationFailedError,
     DeadlineExceededError,
     GuestAnswerError,
     RateLimitedError,
     TemporarilyUnavailableError,
 )
-from guest_answer_provider.knowledge import (
+from utopia_homes_prime.guest_answer.models import ActionV1, GuestAnswerResponseV1, SourceV1
+from utopia_homes_prime.inference import sme_wire
+from utopia_homes_prime.inference.sme_client import (
+    Deadline,
+    ExecutionFailure,
+    SharedModelExecutionClient,
+)
+from utopia_homes_prime.inference.sme_wire import ExecutionMessage, JsonSchemaOutput
+from utopia_homes_prime.knowledge.projection import (
     EffectiveKnowledge,
     KnowledgeEntry,
     KnowledgeProjection,
     KnowledgeUnavailable,
 )
-from guest_answer_provider.models import ActionV1, GuestAnswerResponseV1, SourceV1
-from guest_answer_provider.sme_client import (
-    Deadline,
-    ExecutionFailure,
-    SharedModelExecutionClient,
-)
-from guest_answer_provider.sme_wire import ExecutionMessage, JsonSchemaOutput
 
 GUEST_ATTEMPT_BUDGET_MS: Final = 15_000
 """RC2 §6: the provider completes or fails each guest.answer attempt within 15 seconds."""

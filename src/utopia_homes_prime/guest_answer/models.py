@@ -13,8 +13,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from guest_answer_provider import patterns
-from guest_answer_provider.errors import ERROR_CLASSES
+from utopia_homes_prime.guest_answer import patterns
+from utopia_homes_prime.guest_answer.errors import ERROR_CLASSES
 
 _MODEL_CONFIG = ConfigDict(extra="forbid", frozen=True)
 

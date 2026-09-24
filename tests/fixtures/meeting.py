@@ -14,8 +14,8 @@ from typing import Any
 from fixtures.fake_sme import FakeSharedModelExecution
 from fixtures.homes_prime import HomesPrimeHarness, build_homes_prime_env
 from fixtures.keys import TestKeypair, generate_test_keypair, sign_token
-from guest_answer_provider.api import create_app
-from guest_answer_provider.config import Config
+from utopia_homes_prime.business_api.api import create_app
+from utopia_homes_prime.config import Config
 
 REPO = Path(__file__).resolve().parents[2]
 MANIFEST = REPO / "materials" / "homes-dragon" / "manifest.json"

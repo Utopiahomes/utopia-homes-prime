@@ -1,4 +1,4 @@
-"""Process entrypoint: `python -m guest_answer_provider.runtime`.
+"""Process entrypoint: `python -m utopia_homes_prime.runtime`.
 
 Fail-closed startup gate: a malformed environment must never fall back to a default runtime
 identity or a partially-configured legacy upstream — it must refuse to start.
@@ -11,8 +11,8 @@ import sys
 
 import uvicorn
 
-from guest_answer_provider.api import create_app
-from guest_answer_provider.config import Config, ConfigError
+from utopia_homes_prime.business_api.api import create_app
+from utopia_homes_prime.config import Config, ConfigError
 
 
 def main() -> None:

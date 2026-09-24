@@ -13,9 +13,9 @@ import uuid
 import pytest
 from fixtures.homes_knowledge import synthetic_corpus
 
-from guest_answer_provider import homes_prime, sme_wire
-from guest_answer_provider.knowledge import KnowledgeEntry
-from guest_answer_provider.sme_wire import (
+from utopia_homes_prime.guest_answer import homes_prime
+from utopia_homes_prime.inference import sme_wire
+from utopia_homes_prime.inference.sme_wire import (
     ExecutionMessage,
     JsonSchemaOutput,
     WireViolation,
@@ -25,6 +25,7 @@ from guest_answer_provider.sme_wire import (
     prepare_request,
     validate_instance,
 )
+from utopia_homes_prime.knowledge.projection import KnowledgeEntry
 
 KEY = "0b4f8a2e-6c1d-4e3a-9f5b-7d2c1e0a9b8c"
 VERDICT = homes_prime.verdict_schema()
@@ -159,7 +160,7 @@ def test_thirty_two_messages_accepted_and_thirty_four_rejected():
 def _knowledge():
     from datetime import UTC, datetime
 
-    from guest_answer_provider.knowledge import KnowledgeProjection
+    from utopia_homes_prime.knowledge.projection import KnowledgeProjection
 
     entries = tuple(KnowledgeEntry.model_validate(e) for e in synthetic_corpus()["entries"])
     projection = KnowledgeProjection(

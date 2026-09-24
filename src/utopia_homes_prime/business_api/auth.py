@@ -19,9 +19,9 @@ import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-from guest_answer_provider import patterns
-from guest_answer_provider.config import Environment, JwtAllowlistedKey
-from guest_answer_provider.jti_replay import JtiReplayStore
+from utopia_homes_prime.business_api.jti_replay import JtiReplayStore
+from utopia_homes_prime.config import Environment, JwtAllowlistedKey
+from utopia_homes_prime.guest_answer import patterns
 
 _JWT_ALGORITHM = "EdDSA"
 REQUIRED_SCOPE = "guest.answer"

@@ -12,7 +12,10 @@ import asyncio
 import time
 from collections.abc import Callable
 
-from guest_answer_provider.patterns import JWT_CLOCK_SKEW_SECONDS, JWT_MAX_LIFETIME_SECONDS
+from utopia_homes_prime.guest_answer.patterns import (
+    JWT_CLOCK_SKEW_SECONDS,
+    JWT_MAX_LIFETIME_SECONDS,
+)
 
 TTL_SECONDS = JWT_MAX_LIFETIME_SECONDS + JWT_CLOCK_SKEW_SECONDS
 

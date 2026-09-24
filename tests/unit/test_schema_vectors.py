@@ -8,7 +8,7 @@ from __future__ import annotations
 import pytest
 from vector_helpers import load_json, vectors_in
 
-from guest_answer_provider import schema_validation
+from utopia_homes_prime.guest_answer import schema_validation
 
 
 def _document(vector: dict) -> dict:

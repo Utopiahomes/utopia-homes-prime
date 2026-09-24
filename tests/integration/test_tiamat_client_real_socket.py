@@ -20,9 +20,13 @@ from fixtures.fake_sme import FakeSharedModelExecution, success
 from fixtures.fake_sme_server import run as run_fake_tiamat
 from fixtures.homes_prime import EXECUTION_ISSUER, GENERATE, generate_execution_keypair
 
-from guest_answer_provider import sme_wire
-from guest_answer_provider.sme_client import Deadline, ExecutionIdentity, SharedModelExecutionClient
-from guest_answer_provider.sme_wire import ExecutionMessage, JsonSchemaOutput
+from utopia_homes_prime.inference import sme_wire
+from utopia_homes_prime.inference.sme_client import (
+    Deadline,
+    ExecutionIdentity,
+    SharedModelExecutionClient,
+)
+from utopia_homes_prime.inference.sme_wire import ExecutionMessage, JsonSchemaOutput
 
 
 def _prepared():

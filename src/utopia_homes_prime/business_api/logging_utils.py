@@ -11,7 +11,7 @@ import json
 import logging
 import os
 
-_logger = logging.getLogger("guest_answer_provider.access")
+_logger = logging.getLogger("utopia_homes_prime.access")
 
 _SESSION_DIGEST_KEY = os.environ.get(
     "GUEST_ANSWER_PROVIDER_SESSION_DIGEST_KEY", os.urandom(32).hex()

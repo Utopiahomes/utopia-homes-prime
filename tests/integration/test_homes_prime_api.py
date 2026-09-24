@@ -21,9 +21,9 @@ from fixtures.homes_prime import (
 )
 from fixtures.keys import sign_token
 
-from guest_answer_provider import schema_validation
-from guest_answer_provider.api import create_app
-from guest_answer_provider.config import Config, ConfigError
+from utopia_homes_prime.business_api.api import create_app
+from utopia_homes_prime.config import Config, ConfigError
+from utopia_homes_prime.guest_answer import schema_validation
 
 ENDPOINT = "/business/v1/guest/answer"
 
@@ -358,7 +358,7 @@ def test_unapproved_knowledge_digest_fails_at_startup(tmp_path):
     harness = build_homes_prime_env(
         tmp_path, extra={"GUEST_ANSWER_PROVIDER_HOMES_PRIME_KNOWLEDGE_ALLOWED_DIGESTS": "0" * 64}
     )
-    from guest_answer_provider.knowledge import KnowledgeUnavailable
+    from utopia_homes_prime.knowledge.projection import KnowledgeUnavailable
 
     with pytest.raises(KnowledgeUnavailable):
         create_app(config=Config.from_environment(harness.env))

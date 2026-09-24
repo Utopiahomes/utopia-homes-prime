@@ -18,15 +18,16 @@ from fixtures.homes_prime import (
     generate_execution_keypair,
 )
 
-from guest_answer_provider import homes_prime, sme_wire
-from guest_answer_provider.sme_client import (
+from utopia_homes_prime.guest_answer import homes_prime
+from utopia_homes_prime.inference import sme_wire
+from utopia_homes_prime.inference.sme_client import (
     Deadline,
     ExecutionFailure,
     ExecutionIdentity,
     SharedModelExecutionClient,
     classify_error_code,
 )
-from guest_answer_provider.sme_wire import ExecutionMessage, JsonSchemaOutput
+from utopia_homes_prime.inference.sme_wire import ExecutionMessage, JsonSchemaOutput
 
 URL = "http://127.0.0.1:9/execution/v1/inference"
 

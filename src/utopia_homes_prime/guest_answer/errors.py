@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from guest_answer_provider.patterns import ERROR_CODE_VALUES
+from utopia_homes_prime.guest_answer.patterns import ERROR_CODE_VALUES
 
 assert set(ERROR_CODE_VALUES) == {
     "invalid_request",

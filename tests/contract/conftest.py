@@ -149,7 +149,7 @@ def _spawn(*, upstream: FakeLegacyUpstream) -> Iterator[SpawnedProvider]:
     )
 
     process = subprocess.Popen(
-        [sys.executable, "-m", "guest_answer_provider.runtime"],
+        [sys.executable, "-m", "utopia_homes_prime.runtime"],
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,

@@ -25,7 +25,7 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from guest_answer_provider import patterns
+from utopia_homes_prime.guest_answer import patterns
 
 KNOWLEDGE_SCHEMA = "lucy-public-knowledge-v1"
 MAX_ADMITTED_IDS = 64

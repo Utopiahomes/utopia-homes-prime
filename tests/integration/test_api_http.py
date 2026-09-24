@@ -13,7 +13,7 @@ from vector_helpers import load_json, vectors_in
 
 
 def test_happy_path_schema_valid_response(client, valid_headers, valid_body, fake_upstream):
-    from guest_answer_provider import schema_validation
+    from utopia_homes_prime.guest_answer import schema_validation
 
     response = client.post("/business/v1/guest/answer", json=valid_body, headers=valid_headers)
     assert response.status_code == 200

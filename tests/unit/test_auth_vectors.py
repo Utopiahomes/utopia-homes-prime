@@ -15,14 +15,14 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from vector_helpers import load_json, vectors_in
 
-from guest_answer_provider.auth import (
+from utopia_homes_prime.business_api.auth import (
     REQUIRED_SCOPE,
     AuthenticationFailure,
     KeyAllowlist,
     authenticate,
 )
-from guest_answer_provider.config import JwtAllowlistedKey
-from guest_answer_provider.jti_replay import JtiReplayStore
+from utopia_homes_prime.business_api.jti_replay import JtiReplayStore
+from utopia_homes_prime.config import JwtAllowlistedKey
 
 
 def _generate_keypair() -> tuple[str, str]:

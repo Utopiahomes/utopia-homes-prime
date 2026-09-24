@@ -10,7 +10,11 @@ import asyncio
 import pytest
 from vector_helpers import load_json, vectors_in
 
-from guest_answer_provider.idempotency import IdempotencyScopeKey, IdempotencyStore, _decide
+from utopia_homes_prime.business_api.idempotency import (
+    IdempotencyScopeKey,
+    IdempotencyStore,
+    _decide,
+)
 
 
 @pytest.mark.parametrize("path", vectors_in("invariants", "inv.I-B09.*.json"), ids=lambda p: p.stem)

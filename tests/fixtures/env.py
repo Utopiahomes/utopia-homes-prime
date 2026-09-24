@@ -10,7 +10,7 @@ import json
 from dataclasses import dataclass
 
 from fixtures.keys import TestKeypair, generate_test_keypair
-from guest_answer_provider.config import Config
+from utopia_homes_prime.config import Config
 
 DEFAULT_SNAPSHOT_DIGEST = hashlib.sha256(b"fixture-snapshot").hexdigest()
 

@@ -55,8 +55,8 @@ import re
 import pytest
 from sme_vector_helpers import VECTORS, load_json, vectors_in
 
-from guest_answer_provider import sme_wire
-from guest_answer_provider.sme_wire import (
+from utopia_homes_prime.inference import sme_wire
+from utopia_homes_prime.inference.sme_wire import (
     ExecutionMessage,
     JsonSchemaOutput,
     WireViolation,

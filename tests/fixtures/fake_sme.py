@@ -1,7 +1,7 @@
 """A fake Shared Model Execution provider for Homes-side tests (SME RC1).
 
-Deliberately independent of guest_answer_provider.sme_wire: request verification here re-derives
-the RC1 rules (digest, `req` binding, JWT claims, `jti` replay, message ordering, headers) with
+Deliberately independent of utopia_homes_prime.inference.sme_wire: request verification here
+re-derives the RC1 rules (digest, `req` binding, JWT claims, `jti` replay, message ordering, headers) with
 hashlib/base64/PyJWT directly, so a bug in the client's request construction cannot be masked by
 the same bug in the verifier.
 

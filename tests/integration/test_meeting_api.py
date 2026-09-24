@@ -28,9 +28,9 @@ from fixtures.meeting import (
     respond_body,
 )
 
-from guest_answer_provider.api import create_app
-from guest_answer_provider.config import Config, ConfigError
-from guest_answer_provider.meeting_materials import MaterialsUnavailable
+from utopia_homes_prime.business_api.api import create_app
+from utopia_homes_prime.config import Config, ConfigError
+from utopia_homes_prime.meeting_assist.meeting_materials import MaterialsUnavailable
 
 IDENTITY = "/business/v1/meeting/identity"
 RESPOND = "/business/v1/meeting/respond"

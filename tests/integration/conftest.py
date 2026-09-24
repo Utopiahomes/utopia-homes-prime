@@ -9,8 +9,8 @@ from fastapi.testclient import TestClient
 from fixtures.env import DEFAULT_SNAPSHOT_DIGEST, build_test_environment
 from fixtures.keys import sign_token
 
-from guest_answer_provider.api import create_app
-from guest_answer_provider.config import Config
+from utopia_homes_prime.business_api.api import create_app
+from utopia_homes_prime.config import Config
 
 
 @pytest.fixture()

@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 from vector_helpers import load_json, vectors_in
 
-from guest_answer_provider.canonicalization import canonical_digest
+from utopia_homes_prime.business_api.canonicalization import canonical_digest
 
 
 @pytest.mark.parametrize(
@@ -46,13 +46,13 @@ def test_schema_invalid_body_never_reaches_canonicalization():
     calling canonical_digest() (step 7) — a malformed retry under the same Idempotency-Key must
     never spuriously reach idempotency admission at all."""
     with patch(
-        "guest_answer_provider.api.canonical_digest",
+        "utopia_homes_prime.business_api.api.canonical_digest",
         side_effect=AssertionError("must not be called"),
     ) as mocked:
         from fastapi.testclient import TestClient
         from fixtures.env import build_config
 
-        from guest_answer_provider.api import create_app
+        from utopia_homes_prime.business_api.api import create_app
 
         config = build_config()
         app = create_app(config=config)

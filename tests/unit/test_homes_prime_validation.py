@@ -10,8 +10,8 @@ import pytest
 from fixtures.homes_knowledge import synthetic_corpus
 from fixtures.homes_prime import HARBOR_CAPACITY_DRAFT, SUPPORTED, UNSUPPORTED, draft
 
-from guest_answer_provider import errors, homes_prime, sme_wire
-from guest_answer_provider.homes_prime import (
+from utopia_homes_prime.guest_answer import errors, homes_prime
+from utopia_homes_prime.guest_answer.homes_prime import (
     AnswerRejected,
     ExecutionProfileSettings,
     HomesPrimeSettings,
@@ -21,8 +21,9 @@ from guest_answer_provider.homes_prime import (
     validate_draft,
     validate_verdict,
 )
-from guest_answer_provider.knowledge import KnowledgeEntry, KnowledgeProjection
-from guest_answer_provider.sme_client import ExecutionFailure, classify_error_code
+from utopia_homes_prime.inference import sme_wire
+from utopia_homes_prime.inference.sme_client import ExecutionFailure, classify_error_code
+from utopia_homes_prime.knowledge.projection import KnowledgeEntry, KnowledgeProjection
 
 HOSTS = frozenset({"www.utopiahomes.com"})
 REQUEST = {
@@ -209,7 +210,7 @@ def test_draft_schema_enums_constrain_ids_to_the_effective_packet(knowledge):
 
 
 def test_draft_schema_never_drops_id_enums(knowledge):
-    from guest_answer_provider.knowledge import EffectiveKnowledge, KnowledgeUnavailable
+    from utopia_homes_prime.knowledge.projection import EffectiveKnowledge, KnowledgeUnavailable
 
     schema = homes_prime.draft_schema(knowledge)
     link_items = schema["properties"]["link_ids"]["items"]

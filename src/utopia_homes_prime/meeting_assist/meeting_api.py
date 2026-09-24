@@ -18,19 +18,23 @@ from typing import Any, Final, cast
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from guest_answer_provider import meeting, patterns
-from guest_answer_provider.auth import AuthenticationFailure, KeyAllowlist, authenticate
-from guest_answer_provider.canonicalization import canonical_digest
-from guest_answer_provider.config import (
+from utopia_homes_prime.business_api.auth import AuthenticationFailure, KeyAllowlist, authenticate
+from utopia_homes_prime.business_api.canonicalization import canonical_digest
+from utopia_homes_prime.business_api.idempotency import IdempotencyScopeKey, IdempotencyStore
+from utopia_homes_prime.business_api.jti_replay import JtiReplayStore
+from utopia_homes_prime.business_api.logging_utils import access_log, digest_idempotency_key
+from utopia_homes_prime.config import (
     MEETING_DRAFT_BUDGET_MS,
     MEETING_RESPOND_BUDGET_MS,
     Config,
 )
-from guest_answer_provider.idempotency import IdempotencyScopeKey, IdempotencyStore
-from guest_answer_provider.jti_replay import JtiReplayStore
-from guest_answer_provider.logging_utils import access_log, digest_idempotency_key
-from guest_answer_provider.meeting import MeetingEngine, MeetingError
-from guest_answer_provider.meeting_materials import MaterialNotPermitted, MaterialRegistry
+from utopia_homes_prime.guest_answer import patterns
+from utopia_homes_prime.meeting_assist import meeting
+from utopia_homes_prime.meeting_assist.meeting import MeetingEngine, MeetingError
+from utopia_homes_prime.meeting_assist.meeting_materials import (
+    MaterialNotPermitted,
+    MaterialRegistry,
+)
 
 MEETING_PREFIX: Final = "/business/v1/meeting/"
 IDENTITY_PATH: Final = "/business/v1/meeting/identity"

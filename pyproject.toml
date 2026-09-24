@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "utopia-homes-guest-answer-provider"
+name = "utopia-homes-prime"
 version = "0.1.0"
-description = "Homes Prime provider for Business Contract guest.answer@1.0 (RC2), strangler step 2: wraps the existing legacy FAQ-snapshot answer engine behind the frozen protocol."
+description = "Utopia Homes Prime: the Homes business synth (guest.answer, Homes Dragon meeting operations, Homes-selected inference)."
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.116,<1",
@@ -50,7 +50,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
-packages = ["guest_answer_provider"]
+packages = ["utopia_homes_prime"]
 mypy_path = "src"
 
 [[tool.mypy.overrides]]

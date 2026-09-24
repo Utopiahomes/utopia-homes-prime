@@ -22,8 +22,8 @@ import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from guest_answer_provider import sme_wire
-from guest_answer_provider.sme_wire import (
+from utopia_homes_prime.inference import sme_wire
+from utopia_homes_prime.inference.sme_wire import (
     ExecutionError,
     ExecutionSuccess,
     PreparedRequest,

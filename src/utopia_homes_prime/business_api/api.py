@@ -27,17 +27,24 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
-from guest_answer_provider import legacy_bridge, patterns, schema_validation
-from guest_answer_provider.auth import AuthenticationFailure, KeyAllowlist, authenticate
-from guest_answer_provider.bundle_tools import check_invariants_impl
-from guest_answer_provider.canonicalization import canonical_digest
-from guest_answer_provider.config import (
+from utopia_homes_prime.business_api.auth import AuthenticationFailure, KeyAllowlist, authenticate
+from utopia_homes_prime.business_api.canonicalization import canonical_digest
+from utopia_homes_prime.business_api.idempotency import IdempotencyScopeKey, IdempotencyStore
+from utopia_homes_prime.business_api.jti_replay import JtiReplayStore
+from utopia_homes_prime.business_api.logging_utils import (
+    access_log,
+    digest_idempotency_key,
+    digest_session_id,
+)
+from utopia_homes_prime.config import (
     MEETING_DRAFT_BUDGET_MS,
     MEETING_RESPOND_BUDGET_MS,
     Config,
     ExecutionProfileConfig,
 )
-from guest_answer_provider.errors import (
+from utopia_homes_prime.guest_answer import legacy_bridge, patterns, schema_validation
+from utopia_homes_prime.guest_answer.bundle_tools import check_invariants_impl
+from utopia_homes_prime.guest_answer.errors import (
     ERROR_CLASSES,
     AnswerValidationFailedError,
     AuthenticationFailedError,
@@ -53,35 +60,37 @@ from guest_answer_provider.errors import (
     ResponseInvalidatedError,
     TemporarilyUnavailableError,
 )
-from guest_answer_provider.homes_prime import (
+from utopia_homes_prime.guest_answer.homes_prime import (
     GUEST_ATTEMPT_BUDGET_MS,
     ExecutionProfileSettings,
     HomesPrimeEngine,
     HomesPrimeSettings,
 )
-from guest_answer_provider.idempotency import IdempotencyScopeKey, IdempotencyStore
-from guest_answer_provider.jti_replay import JtiReplayStore
-from guest_answer_provider.knowledge import KnowledgeProjection
-from guest_answer_provider.logging_utils import (
-    access_log,
-    digest_idempotency_key,
-    digest_session_id,
+from utopia_homes_prime.guest_answer.models import (
+    ErrorBodyV1,
+    ErrorResponseV1,
+    GuestAnswerResponseV1,
 )
-from guest_answer_provider.meeting import InvalidRequest as MeetingInvalidRequest
-from guest_answer_provider.meeting import MeetingEngine, MeetingError, NotFound, OperationSettings
-from guest_answer_provider.meeting import TemporarilyUnavailable as MeetingUnavailable
-from guest_answer_provider.meeting_api import (
-    is_meeting_path,
-    meeting_error_response,
-    register_meeting_routes,
-)
-from guest_answer_provider.meeting_materials import MaterialRegistry
-from guest_answer_provider.models import ErrorBodyV1, ErrorResponseV1, GuestAnswerResponseV1
-from guest_answer_provider.sme_client import (
+from utopia_homes_prime.inference.sme_client import (
     ExecutionIdentity,
     SharedModelExecutionClient,
     validate_endpoint_url,
 )
+from utopia_homes_prime.knowledge.projection import KnowledgeProjection
+from utopia_homes_prime.meeting_assist.meeting import InvalidRequest as MeetingInvalidRequest
+from utopia_homes_prime.meeting_assist.meeting import (
+    MeetingEngine,
+    MeetingError,
+    NotFound,
+    OperationSettings,
+)
+from utopia_homes_prime.meeting_assist.meeting import TemporarilyUnavailable as MeetingUnavailable
+from utopia_homes_prime.meeting_assist.meeting_api import (
+    is_meeting_path,
+    meeting_error_response,
+    register_meeting_routes,
+)
+from utopia_homes_prime.meeting_assist.meeting_materials import MaterialRegistry
 
 _ERROR_CLASS_BY_CODE = {cls.code: cls for cls in ERROR_CLASSES}
 
