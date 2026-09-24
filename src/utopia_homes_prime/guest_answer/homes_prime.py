@@ -273,11 +273,11 @@ def draft_schema(knowledge: EffectiveKnowledge) -> dict[str, Any]:
                     "properties": {
                         "kind": {"type": "string", "enum": list(SEGMENT_KINDS)},
                         "text": _string(minLength=1, maxLength=2_000),
-                        "evidence_ids": {
-                            "type": "array",
-                            "maxItems": MAX_DISTINCT_EVIDENCE,
-                            "items": evidence_item,
-                        },
+                        # No maxItems here: a bounded array of enums inside the bounded segments
+                        # array exceeds Google's structured-output complexity limit (HTTP 400,
+                        # found on the first real direct-route run, 2026-09-24). validate_draft
+                        # still rejects more than MAX_DISTINCT_EVIDENCE across the whole answer.
+                        "evidence_ids": {"type": "array", "items": evidence_item},
                     },
                     "required": ["kind", "text", "evidence_ids"],
                     "additionalProperties": False,

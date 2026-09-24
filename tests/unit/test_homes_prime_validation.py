@@ -229,6 +229,50 @@ def test_draft_schema_never_drops_id_enums(knowledge):
         homes_prime.draft_schema(oversized)
 
 
+def _assert_no_nested_bounded_arrays(node, inside_bounded=False):
+    if node.get("type") == "array":
+        bounded = "maxItems" in node or "minItems" in node
+        assert not (bounded and inside_bounded), "bounded array nested in a bounded array"
+        if "items" in node:
+            _assert_no_nested_bounded_arrays(node["items"], inside_bounded or bounded)
+    for child in node.get("properties", {}).values():
+        _assert_no_nested_bounded_arrays(child, inside_bounded)
+
+
+def test_output_schemas_stay_inside_googles_structured_output_limits(knowledge):
+    """Google rejects (HTTP 400) a bounded array of enums nested in a bounded array; this was found
+    on the first real direct-route run, 2026-09-24. Every Homes output schema avoids that shape."""
+    from utopia_homes_prime.meeting_assist import meeting
+    from utopia_homes_prime.meeting_assist.meeting_materials import Material
+
+    material = Material("brief-demo", 1, "brief", "Brief", "0" * 64, "text")
+    for schema in (
+        homes_prime.draft_schema(knowledge),
+        homes_prime.verdict_schema(),
+        meeting.respond_schema((material,)),
+        meeting.draft_schema(),
+    ):
+        _assert_no_nested_bounded_arrays(schema)
+
+
+def test_more_than_eight_distinct_evidence_ids_are_rejected():
+    """The per-answer evidence bound is Homes validation's job, not the output schema's."""
+    from fixtures.homes_knowledge import padded_corpus
+
+    entries = tuple(KnowledgeEntry.model_validate(e) for e in padded_corpus(20)["entries"])
+    padded = KnowledgeProjection(
+        release_id="knowledge-test.1",
+        corpus_digest="d" * 64,
+        entries=entries,
+        withdrawn_ids=frozenset(),
+        approved_hostnames=HOSTS,
+    ).effective(datetime(2026, 9, 17, tzinfo=UTC))
+    notes = [f"synthetic-note-{i}" for i in range(1, 10)]
+    with pytest.raises(AnswerRejected) as rejected:
+        _validate(padded, draft(("business_claim", "These notes all apply here.", notes)))
+    assert rejected.value.category == "too_much_evidence"
+
+
 def test_numbers_from_the_visitor_question_are_permitted(knowledge):
     content = draft(
         (

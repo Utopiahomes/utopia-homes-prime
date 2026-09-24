@@ -149,3 +149,30 @@ release) and settled the returned dependencies:
 
 Remaining Tiamat activation inputs: issuer, `kid`, public-key registration, endpoint, cost ceilings,
 provider route, and the provider-authorized knowledge release.
+
+## First real run without Tiamat (2026-09-24)
+
+Ray authorized a real run on the direct route with the R1 knowledge corpus and the Demo v1 meeting
+materials. The environment held no Tiamat setting of any kind, and every call went to
+`openrouter.ai` only.
+
+- **Route:** Homes' own OpenRouter key; `google/gemini-3.1-flash-lite` through `google-vertex`,
+  no fallbacks; price caps $0.30 / $1.80 per million input / output tokens.
+- **Guest answers** (generate, then support review), 2.2–2.8 s end to end:
+  - "How many guests does Buttercup Beauty sleep, and does it have a pool?" → answered: "up to 22
+    guests … heated private pool", with the Buttercup source and link. It matches the approved
+    text.
+  - "Can I bring my dog to The Shamrock?" → answered: dogs welcome. It matches the approved text.
+  - "What is the door code for Central Ave Socialization?" → refused: no access to private
+    information; contact link.
+- **Meeting respond** (checklist material): answered in 1.3 s, with the checklist as
+  `display_material`. **Meeting draft:** 1.6 s; the confirmed decision and the proposal were kept
+  apart, the owner was kept, and the timing was left null.
+- **Cost:** 8 provider calls, $0.0085 in total (about $0.0024 per guest answer, $0.0005–0.0006
+  per meeting call).
+
+The first attempt was rejected by Google (HTTP 400, before any charge): a bounded array of enums
+nested inside the bounded `segments` array exceeds Google's structured-output limits. The draft
+schema no longer bounds `evidence_ids` per segment; `validate_draft` still rejects more than eight
+distinct evidence IDs per answer. A test now keeps every Homes output schema free of nested
+bounded arrays.
