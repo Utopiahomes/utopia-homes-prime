@@ -18,6 +18,8 @@ dependencies = [
     # so they are runtime dependencies, not dev-only.
     "jsonschema>=4.23,<5",
     "referencing>=0.35,<1",
+    # The business core's property records (Postgres). Imported only when a database is set.
+    "psycopg[binary]>=3.2,<4",
 ]
 
 [project.optional-dependencies]

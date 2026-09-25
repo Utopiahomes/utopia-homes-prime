@@ -51,7 +51,7 @@ def _load_fixtures() -> list[dict]:
 
 def _fixture_id(fixture: dict) -> str:
     document = fixture["document"]
-    return f'{document["execution_profile_id"]}:{document["output"]["mode"]}'
+    return f"{document['execution_profile_id']}:{document['output']['mode']}"
 
 
 def _prepared_via_prepare_request(document: dict) -> PreparedRequest:

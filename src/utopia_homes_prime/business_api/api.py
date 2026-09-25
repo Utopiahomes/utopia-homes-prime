@@ -16,6 +16,7 @@ import time
 from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
@@ -36,6 +37,9 @@ from utopia_homes_prime.business_api.logging_utils import (
     digest_idempotency_key,
     digest_session_id,
 )
+from utopia_homes_prime.business_core.records import PropertyRecord
+from utopia_homes_prime.business_core.routes import register_business_routes
+from utopia_homes_prime.business_core.store import PostgresPropertyStore, PropertyStore
 from utopia_homes_prime.config import (
     MEETING_DRAFT_BUDGET_MS,
     MEETING_RESPOND_BUDGET_MS,
@@ -83,6 +87,7 @@ from utopia_homes_prime.inference.sme_client import (
     validate_endpoint_url,
 )
 from utopia_homes_prime.inference.tiamat import TiamatBackend
+from utopia_homes_prime.knowledge.live import LiveKnowledgeProjection
 from utopia_homes_prime.knowledge.projection import KnowledgeProjection
 from utopia_homes_prime.meeting_assist.meeting import InvalidRequest as MeetingInvalidRequest
 from utopia_homes_prime.meeting_assist.meeting import (
@@ -264,7 +269,9 @@ def _success_response(
     return JSONResponse(status_code=200, content=body, headers=headers)
 
 
-def _load_homes_prime(config: Config) -> tuple[KnowledgeProjection, HomesPrimeSettings]:
+def _load_homes_prime(
+    config: Config, store: PropertyStore | None
+) -> tuple[KnowledgeProjection | LiveKnowledgeProjection, HomesPrimeSettings]:
     """Startup-time, fail-closed assembly of the Stage 2 candidate's Homes-owned inputs."""
     prime = config.homes_prime
     assert prime is not None
@@ -286,6 +293,12 @@ def _load_homes_prime(config: Config) -> tuple[KnowledgeProjection, HomesPrimeSe
     )
     if prime.tiamat is not None:
         validate_endpoint_url(prime.tiamat.url, allow_loopback_http=config.environment == "preview")
+    if prime.knowledge_live:
+        assert store is not None
+        base = json.loads(Path(prime.knowledge_path).read_text(encoding="utf-8"))
+        live = LiveKnowledgeProjection(store, base, approved_hostnames=prime.approved_hostnames)
+        live.effective(datetime.now(UTC))  # fail closed at startup if no knowledge can be built
+        return live, settings
     projection = KnowledgeProjection.load(
         Path(prime.knowledge_path),
         release_id=config.knowledge_release_id,
@@ -345,11 +358,21 @@ def create_app(
     *,
     config: Config,
     execution_transport: httpx.AsyncBaseTransport | None = None,
+    business_store: PropertyStore | None = None,
 ) -> FastAPI:
     """`execution_transport` exists only so tests can route the selected inference backend
-    client to an in-process fake; runtime wiring always uses the default network transport."""
+    client to an in-process fake; runtime wiring always uses the default network transport.
+    `business_store` likewise lets tests use an in-memory store instead of Postgres."""
     allowlist = KeyAllowlist(config.jwt_keys)
-    homes_prime_parts = _load_homes_prime(config) if config.answer_engine == "homes-prime" else None
+    store: PropertyStore | None = None
+    if config.business is not None:
+        store = business_store or PostgresPropertyStore(config.business.database_url)
+        if config.business.seed_path:
+            seed = json.loads(Path(config.business.seed_path).read_text(encoding="utf-8"))
+            store.seed_if_empty([PropertyRecord.model_validate(p) for p in seed["properties"]])
+    homes_prime_parts = (
+        _load_homes_prime(config, store) if config.answer_engine == "homes-prime" else None
+    )
     preview_mode_value = (
         HOMES_PRIME_PREVIEW_MODE_HEADER_VALUE
         if config.answer_engine == "homes-prime"
@@ -450,6 +473,11 @@ def create_app(
         if config.meeting is not None and is_meeting_path(request.url.path):
             return meeting_error_response(request, MeetingUnavailable())
         return _error_response(request, TemporarilyUnavailableError())
+
+    if config.business is not None:
+        assert store is not None
+        app.state.business_store = store
+        register_business_routes(app, store=store, lucy_token=config.business.lucy_token)
 
     @app.get("/healthz")
     async def liveness() -> dict[str, str]:

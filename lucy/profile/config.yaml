@@ -1,0 +1,118 @@
+_config_version: 38
+
+# Utopia Lucy: the Utopia Homes business synth. Hermes runs unmodified; this profile gives it the
+# persona (SOUL.md), the model route, and the Utopia business tools (plugins/utopia_business).
+
+model:
+  provider: custom:utopia-openrouter
+  default: openai/gpt-6-luna
+
+providers:
+  utopia-openrouter:
+    name: Utopia OpenRouter
+    api: https://openrouter.ai/api/v1
+    key_env: OPENROUTER_API_KEY
+    transport: chat_completions
+    default_model: openai/gpt-6-luna
+    discover_models: false
+    models:
+      openai/gpt-6-luna: {}
+    extra_body:
+      provider: &utopia_openrouter_policy
+        zdr: true
+        data_collection: deny
+        require_parameters: true
+        max_price:
+          prompt: 0.20
+          completion: 1.00
+
+fallback_providers: []
+
+model_overrides:
+  custom:utopia-openrouter:
+    openai/gpt-6-luna:
+      context_window: 131072
+      max_output_tokens: 2048
+      supports_tools: true
+      supports_reasoning: true
+
+agent:
+  max_turns: 12
+  run_budget_seconds: 180
+  reasoning_effort: low
+  gateway_notify_interval: 0
+
+openrouter:
+  response_cache: false
+
+provider_routing:
+  require_parameters: true
+  data_collection: deny
+
+plugins:
+  enabled:
+    - utopia_business
+
+auxiliary:
+  compression:
+    enabled: false
+  title_generation:
+    enabled: false
+  background_review:
+    enabled: false
+
+memory:
+  memory_enabled: true
+  user_profile_enabled: true
+
+curator:
+  enabled: false
+
+streaming:
+  enabled: false
+
+display:
+  tool_progress: "off"
+  interim_assistant_messages: false
+  show_commentary: false
+  show_reasoning: false
+  runtime_footer:
+    enabled: false
+  platforms:
+    telegram:
+      streaming: false
+      tool_progress: "off"
+      long_running_notifications: "off"
+
+telegram:
+  gateway_restart_notification: false
+
+toolsets: []
+
+platform_toolsets:
+  cli:
+    - utopia_business
+    - memory
+    - session_search
+  telegram:
+    - utopia_business
+    - memory
+    - session_search
+
+known_plugin_toolsets:
+  cli:
+    - utopia_business
+  telegram:
+    - utopia_business
+
+approvals:
+  mode: manual
+  timeout: 300
+  cron_mode: deny
+
+security:
+  allow_lazy_installs: false
+
+unauthorized_dm_behavior: ignore
+
+command_allowlist: []

@@ -204,6 +204,9 @@ class HomesPrimeConfig:
     knowledge_allowed_digests: frozenset[str]
     knowledge_withdrawn_ids: frozenset[str]
     approved_hostnames: frozenset[str]
+    knowledge_live: bool = False
+    """KNOWLEDGE_RELEASE_ID=live: guest knowledge is built from the business core's property
+    records, with `knowledge_path` naming the hand-maintained base entries."""
 
     @classmethod
     def from_environment(cls, env: Mapping[str, str]) -> HomesPrimeConfig:
@@ -240,10 +243,16 @@ class HomesPrimeConfig:
                 max_cost_microusd=integer(f"{kind}_MAX_COST_MICROUSD", None, 1, 1_000_000),
             )
 
-        digests_raw = require("KNOWLEDGE_ALLOWED_DIGESTS")
-        digests = frozenset(item.strip() for item in digests_raw.split(",") if item.strip())
-        if not digests or not all(re.fullmatch(r"[a-f0-9]{64}", item) for item in digests):
-            raise ConfigError(f"{prefix}KNOWLEDGE_ALLOWED_DIGESTS must be lowercase SHA-256 values")
+        live = env.get(f"{_ENV_PREFIX}KNOWLEDGE_RELEASE_ID") == LIVE_KNOWLEDGE
+        if live:
+            digests: frozenset[str] = frozenset()
+        else:
+            digests_raw = require("KNOWLEDGE_ALLOWED_DIGESTS")
+            digests = frozenset(item.strip() for item in digests_raw.split(",") if item.strip())
+            if not digests or not all(re.fullmatch(r"[a-f0-9]{64}", item) for item in digests):
+                raise ConfigError(
+                    f"{prefix}KNOWLEDGE_ALLOWED_DIGESTS must be lowercase SHA-256 values"
+                )
 
         try:
             withdrawn = json.loads(optional("KNOWLEDGE_WITHDRAWN_IDS_JSON", "[]"))
@@ -289,10 +298,15 @@ class HomesPrimeConfig:
             review=profile("REVIEW", DEFAULT_REVIEW_PROFILE_ID, "4000", "300"),
             transit_allowance_ms=integer("TRANSIT_ALLOWANCE_MS", "250", 0, 5_000),
             prime_reserve_ms=integer("RESERVE_MS", "1500", 0, 10_000),
-            knowledge_path=require("KNOWLEDGE_PATH"),
+            knowledge_path=(
+                optional("KNOWLEDGE_BASE_PATH", "knowledge/base/homes-base-entries.json")
+                if live
+                else require("KNOWLEDGE_PATH")
+            ),
             knowledge_allowed_digests=digests,
             knowledge_withdrawn_ids=frozenset(withdrawn),
             approved_hostnames=hostnames,
+            knowledge_live=live,
         )
 
 
@@ -373,7 +387,28 @@ class MeetingConfig:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class BusinessCoreConfig:
+    """Utopia's property records (the business core). Present only where a database is set."""
+
+    database_url: str
+    lucy_token: str
+    seed_path: str | None
+
+    @classmethod
+    def from_environment(cls, env: Mapping[str, str]) -> BusinessCoreConfig | None:
+        url = (env.get("UTOPIA_BUSINESS_DATABASE_URL") or "").strip()
+        if not url:
+            return None
+        token = (env.get("UTOPIA_BUSINESS_LUCY_TOKEN") or "").strip()
+        if len(token) < 32:
+            raise ConfigError("UTOPIA_BUSINESS_LUCY_TOKEN must be at least 32 characters")
+        seed = (env.get("UTOPIA_BUSINESS_SEED_PATH") or "").strip() or None
+        return cls(database_url=url, lucy_token=token, seed_path=seed)
+
+
 LATEST_APPROVED_KNOWLEDGE: Final = "latest-approved"
+LIVE_KNOWLEDGE: Final = "live"
 
 
 def resolve_knowledge_release(env: Mapping[str, str]) -> Mapping[str, str]:
@@ -421,6 +456,7 @@ class Config:
     answer_engine: AnswerEngineName = "legacy-bridge"
     homes_prime: HomesPrimeConfig | None = None
     meeting: MeetingConfig | None = None
+    business: BusinessCoreConfig | None = None
 
     @classmethod
     def from_environment(cls, environment: Mapping[str, str] | None = None) -> Config:
@@ -538,6 +574,12 @@ class Config:
                 f"{_ENV_PREFIX}KNOWLEDGE_RELEASE_ID does not match the required format"
             )
 
+        business = BusinessCoreConfig.from_environment(env)
+        if homes_prime is not None and homes_prime.knowledge_live and business is None:
+            raise ConfigError(
+                f"{_ENV_PREFIX}KNOWLEDGE_RELEASE_ID=live needs UTOPIA_BUSINESS_DATABASE_URL"
+            )
+
         return cls(
             environment=provider_environment,  # type: ignore[arg-type]
             port=port,
@@ -552,6 +594,7 @@ class Config:
             answer_engine=answer_engine,  # type: ignore[arg-type]
             homes_prime=homes_prime,
             meeting=meeting,
+            business=business,
         )
 
     @staticmethod

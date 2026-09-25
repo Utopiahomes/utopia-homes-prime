@@ -1,0 +1,10 @@
+name: utopia_business
+version: 0.1.0
+description: Utopia Homes business tools. Read and correct property records in the business core.
+author: Utopia Homes
+kind: standalone
+provides_tools:
+  - utopia_list_properties
+  - utopia_get_property
+  - utopia_update_property
+  - utopia_property_history

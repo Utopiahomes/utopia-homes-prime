@@ -213,6 +213,24 @@ class KnowledgeProjection:
             document = json.loads(path.read_bytes().decode("utf-8"))
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise KnowledgeUnavailable("approved knowledge corpus cannot be read") from exc
+        return cls.from_document(
+            document,
+            release_id=release_id,
+            allowed_corpus_digests=allowed_corpus_digests,
+            withdrawn_ids=withdrawn_ids,
+            approved_hostnames=approved_hostnames,
+        )
+
+    @classmethod
+    def from_document(
+        cls,
+        document: object,
+        *,
+        release_id: str,
+        allowed_corpus_digests: frozenset[str],
+        withdrawn_ids: frozenset[str],
+        approved_hostnames: frozenset[str],
+    ) -> KnowledgeProjection:
         if not isinstance(document, dict) or document.get("schema") != KNOWLEDGE_SCHEMA:
             raise KnowledgeUnavailable("approved knowledge corpus has the wrong schema")
         if set(document) != {"schema", "entries"}:

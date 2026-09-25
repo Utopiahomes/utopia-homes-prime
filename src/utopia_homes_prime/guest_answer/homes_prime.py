@@ -49,6 +49,7 @@ from utopia_homes_prime.inference.backend import (
     InferenceFailure,
 )
 from utopia_homes_prime.inference.structured_output import ExecutionMessage, JsonSchemaOutput
+from utopia_homes_prime.knowledge.live import LiveKnowledgeProjection
 from utopia_homes_prime.knowledge.projection import (
     EffectiveKnowledge,
     KnowledgeEntry,
@@ -685,7 +686,7 @@ class HomesPrimeEngine:
         self,
         *,
         settings: HomesPrimeSettings,
-        projection: KnowledgeProjection,
+        projection: KnowledgeProjection | LiveKnowledgeProjection,
         backend: InferenceBackend,
         monotonic: Callable[[], float] = time.monotonic,
         wall_clock: Callable[[], datetime] = lambda: datetime.now(UTC),
@@ -695,7 +696,6 @@ class HomesPrimeEngine:
         self._backend = backend
         self._monotonic = monotonic
         self._wall_clock = wall_clock
-        self._approved_destinations = projection.approved_destinations()
         self.last_telemetry: PipelineTelemetry | None = None
 
     @property
@@ -795,7 +795,7 @@ class HomesPrimeEngine:
                 draft,
                 knowledge,
                 approved_hostnames=self._projection.approved_hostnames,
-                approved_destinations=self._approved_destinations,
+                approved_destinations=self._projection.approved_destinations(),
             )
         except AnswerRejected as rejection:
             self.last_telemetry = PipelineTelemetry("final_validation", rejection.category)
