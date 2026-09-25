@@ -1,0 +1,71 @@
+name: Knowledge sync
+
+# Keeps Lucy's knowledge in step with the website. Once a day (or on demand) it reads the
+# website's property feed and, when the property pages have changed, opens or refreshes one pull
+# request proposing the next knowledge release. Merging that pull request is Ray's approval.
+on:
+  schedule:
+    - cron: "17 11 * * *" # daily, early morning US Eastern
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency: knowledge-sync
+
+jobs:
+  propose:
+    runs-on: ubuntu-latest
+    env:
+      BRANCH: knowledge-sync/proposal
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package
+        run: pip install -e .
+
+      - name: Compare the website with the latest approved release
+        id: sync
+        run: python tools/knowledge_sync.py --propose --summary "$RUNNER_TEMP/summary.md"
+
+      # A pull request opened with the workflow token does not trigger CI, so the knowledge checks
+      # run here, against the proposed release, before anything is pushed.
+      - name: Check the proposed release
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          pip install -e ".[dev]"
+          pytest -q tests/unit/test_knowledge_releases.py tests/unit/test_acceptance_set.py \
+            tests/unit/test_knowledge_sync.py tests/unit/test_knowledge.py
+
+      - name: Open or refresh the proposal pull request
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ steps.sync.outputs.release_id }}
+        run: |
+          git config user.name "utopia-homes-knowledge-sync"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git add knowledge
+          git commit -m "Propose Lucy knowledge $RELEASE from the website"
+          git push --force origin "$BRANCH"
+          title="Lucy knowledge update: $RELEASE"
+          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            gh pr edit "$BRANCH" --title "$title" --body-file "$RUNNER_TEMP/summary.md"
+          else
+            gh pr create --base main --head "$BRANCH" --title "$title" --body-file "$RUNNER_TEMP/summary.md"
+          fi
+
+      - name: Close a stale proposal when the website matches the approved release again
+        if: steps.sync.outputs.changed == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            gh pr close "$BRANCH" --delete-branch --comment "The website matches the approved knowledge again."
+          fi

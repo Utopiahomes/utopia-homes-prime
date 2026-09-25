@@ -1,0 +1,331 @@
+{
+ "schema": "homes-knowledge-base-v1",
+ "note": "Hand-maintained Lucy knowledge that is not about a single property. tools/knowledge_sync.py combines it with the website's property feed into each release, and rewrites collection-overview's text from the active properties.",
+ "entries": [
+  {
+   "id": "about-owner-led-hospitality",
+   "service_line": "general",
+   "kind": "description",
+   "title": "Owner-led hospitality",
+   "approved_text": "Utopia Homes is built from the owner’s side of hospitality. Its approach begins with the home, carries through the guest experience, and focuses on the details that make a stay memorable.",
+   "aliases": [
+    "what makes Utopia different",
+    "who runs Utopia",
+    "hosting experience"
+   ],
+   "topics": [
+    "owners",
+    "hospitality",
+    "about"
+   ],
+   "route": "about",
+   "source": {
+    "id": "about-page",
+    "label": "About Utopia Homes",
+    "href": "https://www.utopiahomes.com/about"
+   },
+   "links": [
+    {
+     "id": "about-page-link",
+     "label": "Meet Utopia Homes",
+     "href": "https://www.utopiahomes.com/about"
+    }
+   ],
+   "effective_from": "2026-09-12T00:00:00Z",
+   "direct_answer": false
+  },
+  {
+   "id": "booking-external-handoff",
+   "service_line": "homes",
+   "kind": "policy",
+   "title": "How booking works",
+   "approved_text": "Utopia property pages introduce each home. Use a home’s Check availability link to continue to its configured external booking page for current availability, pricing, and complete booking details.",
+   "aliases": [
+    "reserve",
+    "make a reservation",
+    "book a stay",
+    "check dates"
+   ],
+   "topics": [
+    "booking",
+    "availability",
+    "pricing"
+   ],
+   "route": "stays",
+   "source": {
+    "id": "stays-page",
+    "label": "Utopia stays",
+    "href": "https://www.utopiahomes.com/stays"
+   },
+   "links": [
+    {
+     "id": "stays-page-link",
+     "label": "Explore all stays",
+     "href": "https://www.utopiahomes.com/stays"
+    }
+   ],
+   "effective_from": "2026-09-12T00:00:00Z",
+   "direct_answer": true
+  },
+  {
+   "id": "collection-overview",
+   "service_line": "homes",
+   "kind": "navigation",
+   "title": "Current Utopia Homes collection",
+   "approved_text": "The current Utopia Homes collection includes Buttercup Beauty in Wildwood Crest, Central Ave Socialization in North Wildwood, and The Shamrock in Wildwood, New Jersey.",
+   "aliases": [
+    "which homes",
+    "places to stay",
+    "properties",
+    "rentals"
+   ],
+   "topics": [
+    "location",
+    "homes",
+    "stays"
+   ],
+   "route": "stays",
+   "source": {
+    "id": "stays-page",
+    "label": "Utopia stays",
+    "href": "https://www.utopiahomes.com/stays"
+   },
+   "links": [
+    {
+     "id": "stays-page-link",
+     "label": "Explore all stays",
+     "href": "https://www.utopiahomes.com/stays"
+    }
+   ],
+   "effective_from": "2026-09-12T00:00:00Z",
+   "direct_answer": true
+  },
+  {
+   "id": "contact-utopia",
+   "service_line": "general",
+   "kind": "call_to_action",
+   "title": "Contact Utopia Homes",
+   "approved_text": "Use the Utopia Homes contact form for questions about stays, property management, Utopia Design, or general inquiries.",
+   "aliases": [
+    "get in touch",
+    "talk to someone",
+    "send a message",
+    "help"
+   ],
+   "topics": [
+    "contact",
+    "booking",
+    "owners",
+    "design"
+   ],
+   "route": "contact",
+   "source": {
+    "id": "contact-page",
+    "label": "Contact Utopia Homes",
+    "href": "https://www.utopiahomes.com/contact"
+   },
+   "links": [
+    {
+     "id": "contact-page-link",
+     "label": "Contact Utopia Homes",
+     "href": "https://www.utopiahomes.com/contact"
+    }
+   ],
+   "effective_from": "2026-09-12T00:00:00Z",
+   "direct_answer": true
+  },
+  {
+   "id": "design-estimate",
+   "service_line": "design",
+   "kind": "policy",
+   "title": "Utopia Design preliminary estimate",
+   "approved_text": "The Utopia Design Quote Studio uses the project details, preferences, and inspiration you provide to prepare a nonbinding preliminary estimate. Final pricing follows review by the Utopia team.",
+   "aliases": [
+    "design quote",
+    "how much design costs",
+    "pricing engine",
+    "project estimate"
+   ],
+   "topics": [
+    "design",
+    "estimate"
+   ],
+   "route": "design",
+   "source": {
+    "id": "design-page",
+    "label": "Utopia Design",
+    "href": "https://www.utopiahomes.com/design"
+   },
+   "links": [
+    {
+     "id": "design-quote-link",
+     "label": "Start a design estimate",
+     "href": "https://www.utopiahomes.com/design/quote"
+    }
+   ],
+   "effective_from": "2026-09-12T00:00:00Z",
+   "direct_answer": true
+  },
+  {
+   "id": "design-personal-services",
+   "service_line": "design",
+   "kind": "description",
+   "title": "Design services for personal homes",
+   "approved_text": "For personal homes, Utopia Design can help transform a room, create a whole-home design plan, or plan the design direction for a renovation or new home.",
+   "aliases": [
+    "interior design",
+    "decorate my home",
+    "whole house",
+    "room makeover"
+   ],
+   "topics": [
+    "design",
+    "services"
+   ],
+   "route": "design",
+   "source": {
+    "id": "design-page",
+    "label": "Utopia Design",
+    "href": "https://www.utopiahomes.com/design"
+   },
+   "links": [
+    {
+     "id": "design-personal-link",
+     "label": "Explore personal-home design",
+     "href": "https://www.utopiahomes.com/design?audience=personal"
+    }
+   ],
+   "effective_from": "2026-09-12T00:00:00Z",
+   "direct_answer": false
+  },
+  {
+   "id": "design-rental-services",
+   "service_line": "design",
+   "kind": "description",
+   "title": "Design services for rentals",
+   "approved_text": "For rentals, Utopia Design can evaluate an existing rental, furnish an empty property, or plan the design direction for a rental renovation.",
+   "aliases": [
+    "vacation rental design",
+    "rental interiors",
+    "furnish rental",
+    "rental audit"
+   ],
+   "topics": [
+    "design",
+    "owners",
+    "services"
+   ],
+   "route": "design",
+   "source": {
+    "id": "design-page",
+    "label": "Utopia Design",
+    "href": "https://www.utopiahomes.com/design"
+   },
+   "links": [
+    {
+     "id": "design-rental-link",
+     "label": "Explore rental design",
+     "href": "https://www.utopiahomes.com/design?audience=rental"
+    }
+   ],
+   "effective_from": "2026-09-12T00:00:00Z",
+   "direct_answer": false
+  },
+  {
+   "id": "destination-wildwoods-cape-may",
+   "service_line": "homes",
+   "kind": "description",
+   "title": "The Wildwoods and Cape May",
+   "approved_text": "Utopia’s home coast includes the Wildwoods and Cape May in Southern Cape May County, with broad beaches, boardwalk energy, historic streets, and reasons to gather beyond the summer peak.",
+   "aliases": [
+    "where are the homes",
+    "Jersey Shore",
+    "Wildwood Crest",
+    "North Wildwood"
+   ],
+   "topics": [
+    "location",
+    "destination"
+   ],
+   "route": "destination",
+   "source": {
+    "id": "wildwood-destination-page",
+    "label": "Wildwood and Cape May",
+    "href": "https://www.utopiahomes.com/destinations/wildwood-new-jersey"
+   },
+   "links": [
+    {
+     "id": "wildwood-destination-link",
+     "label": "Explore the destination",
+     "href": "https://www.utopiahomes.com/destinations/wildwood-new-jersey"
+    }
+   ],
+   "effective_from": "2026-09-12T00:00:00Z",
+   "direct_answer": false
+  },
+  {
+   "id": "membership-status",
+   "service_line": "general",
+   "kind": "policy",
+   "title": "Utopia membership status",
+   "approved_text": "Utopia membership is coming soon and is not live today. Join the launch list to hear when it opens and what early members can expect.",
+   "aliases": [
+    "membership launch",
+    "join Utopia",
+    "member perks",
+    "rewards"
+   ],
+   "topics": [
+    "membership"
+   ],
+   "route": "membership",
+   "source": {
+    "id": "membership-page",
+    "label": "Utopia membership",
+    "href": "https://www.utopiahomes.com/membership"
+   },
+   "links": [
+    {
+     "id": "membership-page-link",
+     "label": "Join the membership launch list",
+     "href": "https://www.utopiahomes.com/membership"
+    }
+   ],
+   "effective_from": "2026-09-12T00:00:00Z",
+   "direct_answer": true
+  },
+  {
+   "id": "owners-management-model",
+   "service_line": "homes",
+   "kind": "description",
+   "title": "Utopia’s owner management model",
+   "approved_text": "Utopia combines vacation-rental management, distinctive marketing, local property oversight, guest communication, cleaning, maintenance, issue resolution, and thoughtful property improvements for Wildwood homeowners.",
+   "aliases": [
+    "manage my home",
+    "property management",
+    "list my home",
+    "owner services"
+   ],
+   "topics": [
+    "owners",
+    "management",
+    "design"
+   ],
+   "route": "owners",
+   "source": {
+    "id": "owners-page",
+    "label": "List your home",
+    "href": "https://www.utopiahomes.com/list-your-home"
+   },
+   "links": [
+    {
+     "id": "owners-page-link",
+     "label": "Explore owner services",
+     "href": "https://www.utopiahomes.com/list-your-home"
+    }
+   ],
+   "effective_from": "2026-09-12T00:00:00Z",
+   "direct_answer": true
+  }
+ ]
+}

@@ -1,5 +1,5 @@
 """The Homes acceptance set is well formed: every request it produces is a valid RC2 request, and
-every source it expects exists in the knowledge it is written against. No network."""
+every source it expects exists in the latest approved knowledge release. No network."""
 
 from __future__ import annotations
 
@@ -17,8 +17,11 @@ DOCUMENT = json.loads(
         encoding="utf-8"
     )
 )
-R1 = json.loads((ROOT / "knowledge/r1/utopia-public-knowledge.r1.json").read_text(encoding="utf-8"))
-SOURCES = {entry["source"]["id"] for entry in R1["entries"]}
+REGISTER = json.loads((ROOT / "knowledge/releases.json").read_text(encoding="utf-8"))
+LATEST = json.loads(
+    (ROOT / REGISTER["releases"][-1]["file"]).read_text(encoding="utf-8")
+)  # the set is written against the knowledge Lucy serves: the latest approved release
+SOURCES = {entry["source"]["id"] for entry in LATEST["entries"]}
 OUTCOMES = {"answered", "partial", "clarification_needed", "out_of_scope", "refused"}
 TURN_KEYS = {
     "message",

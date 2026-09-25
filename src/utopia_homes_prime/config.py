@@ -10,6 +10,7 @@ import os
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Final, Literal
 
 _ENV_PREFIX = "GUEST_ANSWER_PROVIDER_"
@@ -372,6 +373,39 @@ class MeetingConfig:
         )
 
 
+LATEST_APPROVED_KNOWLEDGE: Final = "latest-approved"
+
+
+def resolve_knowledge_release(env: Mapping[str, str]) -> Mapping[str, str]:
+    """`KNOWLEDGE_RELEASE_ID=latest-approved` serves the last release in the knowledge register
+    (`HOMES_PRIME_KNOWLEDGE_REGISTER`, e.g. /app/knowledge/releases.json). Every register entry
+    reached main through Ray's approval, so a deploy picks up a newly approved release without
+    anyone retyping its path and digest. The digest pin still applies; it comes from the
+    register."""
+    release_key = f"{_ENV_PREFIX}KNOWLEDGE_RELEASE_ID"
+    if env.get(release_key) != LATEST_APPROVED_KNOWLEDGE:
+        return env
+    prime = f"{_ENV_PREFIX}HOMES_PRIME_"
+    for pinned in ("KNOWLEDGE_PATH", "KNOWLEDGE_ALLOWED_DIGESTS"):
+        if env.get(prime + pinned):
+            raise ConfigError(
+                f"{prime}{pinned} must be unset when serving {LATEST_APPROVED_KNOWLEDGE}"
+            )
+    register_path = Path((env.get(prime + "KNOWLEDGE_REGISTER") or "").strip())
+    if not register_path.name:
+        raise ConfigError(f"missing required environment variable {prime}KNOWLEDGE_REGISTER")
+    try:
+        latest = json.loads(register_path.read_text(encoding="utf-8"))["releases"][-1]
+        resolved = {
+            release_key: str(latest["release_id"]),
+            prime + "KNOWLEDGE_PATH": str(register_path.parent.parent / latest["file"]),
+            prime + "KNOWLEDGE_ALLOWED_DIGESTS": str(latest["canonical_digest"]),
+        }
+    except (OSError, ValueError, KeyError, IndexError, TypeError) as exc:
+        raise ConfigError(f"{prime}KNOWLEDGE_REGISTER has no readable latest release") from exc
+    return {**env, **resolved}
+
+
 @dataclass(frozen=True, slots=True)
 class Config:
     environment: Environment
@@ -390,7 +424,7 @@ class Config:
 
     @classmethod
     def from_environment(cls, environment: Mapping[str, str] | None = None) -> Config:
-        env = environment if environment is not None else os.environ
+        env = resolve_knowledge_release(environment if environment is not None else os.environ)
 
         def require(name: str) -> str:
             value = env.get(f"{_ENV_PREFIX}{name}")

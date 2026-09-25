@@ -1,0 +1,129 @@
+{
+ "schema": "utopia-homes-public-properties-v1",
+ "properties": [
+  {
+   "slug": "buttercup-beauty",
+   "name": "Buttercup Beauty",
+   "city": "Wildwood Crest",
+   "state": "New Jersey",
+   "short_description": "A spacious Wildwood Crest gathering place with a heated pool, hot tub, and room for the whole family.",
+   "full_description": "Buttercup Beauty is a generous shore home designed around time together. Its open living spaces, game room, and fenced backyard make it especially well suited to multigenerational groups and friends traveling with dogs.",
+   "max_guests": 22,
+   "bedrooms": 7,
+   "beds": 13,
+   "bathrooms": 3.5,
+   "amenities": [
+    {
+     "name": "Outside",
+     "amenities": [
+      "Shared beach access",
+      "Heated private pool",
+      "Private hot tub",
+      "Large fenced backyard"
+     ]
+    },
+    {
+     "name": "At home",
+     "amenities": [
+      "Kitchen",
+      "Wi-Fi",
+      "In-unit washer and dryer",
+      "Smart TVs",
+      "Foosball table"
+     ]
+    }
+   ],
+   "unique_features": [
+    "Approximately 3,200 square feet of interior space",
+    "Heated private pool and eight-person hot tub",
+    "Game room, covered dining area, and bakery directly across the street"
+   ],
+   "pet_policy": "Dogs of any size are welcome.",
+   "parking": "Parking for 4 cars.",
+   "accessibility": "Guests climb a few stairs at the entrance. Please contact us before booking to discuss specific accessibility needs."
+  },
+  {
+   "slug": "central-ave-socialization",
+   "name": "Central Ave Socialization",
+   "city": "North Wildwood",
+   "state": "New Jersey",
+   "short_description": "A relaxed North Wildwood shore house with a heated private pool, hot tub, and easy beach access.",
+   "full_description": "Central Ave Socialization is a recently renovated group retreat built around easy time together. An open living area and fully fenced backyard create a welcoming home base for beach days, pool time, and evenings with the whole crew—including dogs.",
+   "max_guests": 22,
+   "bedrooms": 7,
+   "beds": 18,
+   "bathrooms": 3.5,
+   "amenities": [
+    {
+     "name": "Outside",
+     "amenities": [
+      "Beach access",
+      "Heated private pool",
+      "Hot tub",
+      "Fully fenced backyard",
+      "Patio seating and fire pit"
+     ]
+    },
+    {
+     "name": "At home",
+     "amenities": [
+      "Kitchen",
+      "Wi-Fi",
+      "TV",
+      "Washer",
+      "In-unit dryer"
+     ]
+    }
+   ],
+   "unique_features": [
+    "Approximately a five-minute walk to Albert I. Allen Memorial Park",
+    "Heated private pool and hot tub in a fully fenced backyard",
+    "Seven bedrooms and eighteen listed beds for large-group stays"
+   ],
+   "pet_policy": "Dogs of all sizes are welcome.",
+   "parking": "Parking for 3 cars.",
+   "accessibility": "Please contact us before booking to discuss specific accessibility needs."
+  },
+  {
+   "slug": "the-shamrock",
+   "name": "The Shamrock",
+   "city": "Wildwood",
+   "state": "New Jersey",
+   "short_description": "A colorful Wildwood original, made for milestone weekends and the whole crew.",
+   "full_description": "Big groups deserve a home with just as much personality. The Shamrock brings everyone together in a restored piece of Wildwood history, with generous shared spaces and a location close to the beach, boardwalk, and downtown.",
+   "max_guests": 32,
+   "bedrooms": 10,
+   "beds": 19,
+   "bathrooms": 5,
+   "amenities": [
+    {
+     "name": "Location",
+     "amenities": [
+      "Shared beach access",
+      "About two blocks from the boardwalk",
+      "Walkable to downtown Wildwood"
+     ]
+    },
+    {
+     "name": "At home",
+     "amenities": [
+      "Kitchen",
+      "Wi-Fi",
+      "Dedicated workspace",
+      "HDTV",
+      "Washer and in-unit dryer",
+      "Central air conditioning"
+     ]
+    }
+   ],
+   "unique_features": [
+    "A restored piece of the historic Shamrock property",
+    "Ten bedrooms, four living rooms, and two decks",
+    "Garage and driveway parking for six cars"
+   ],
+   "pet_policy": "Dogs of all shapes and sizes are welcome.",
+   "parking": "Parking for 6 cars.",
+   "accessibility": "Please contact us before booking to discuss specific accessibility needs."
+  }
+ ]
+}

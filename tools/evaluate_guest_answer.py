@@ -41,8 +41,8 @@ from utopia_homes_prime.config import Config
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = ROOT / "knowledge" / "evaluation" / "homes-guest-answer-acceptance.v1.json"
-R1 = ROOT / "knowledge" / "r1" / "utopia-public-knowledge.r1.json"
-R1_DIGEST = "95e2e20a9e4a3786e3daa63a73bb5ff2866b5bae295e6dc138bf432e4361c422"
+# In-process mode serves the latest approved knowledge release, as production does.
+REGISTER = ROOT / "knowledge" / "releases.json"
 ISSUER = "stoin:application:homes-evaluation"
 SUBJECT = "stoin:service:homes-evaluation"
 AUDIENCE = "stoin:business:utopia-homes-prime"
@@ -156,7 +156,7 @@ def build_app(args: argparse.Namespace, recorder: Recorder) -> tuple[Any, Ed2551
         ),
         f"{p}RATE_LIMIT_PER_MINUTE": "600",
         f"{p}BUSINESS_RELEASE_ID": "homes-business:release:evaluation",
-        f"{p}KNOWLEDGE_RELEASE_ID": "homes-knowledge:r1",
+        f"{p}KNOWLEDGE_RELEASE_ID": "latest-approved",
         f"{p}ANSWER_ENGINE": "homes-prime",
         f"{h}INFERENCE_BACKEND": "direct-openrouter",
         f"{h}OPENROUTER_API_KEY": read_key(args.key_file),
@@ -166,8 +166,7 @@ def build_app(args: argparse.Namespace, recorder: Recorder) -> tuple[Any, Ed2551
         f"{h}OPENROUTER_MAX_COMPLETION_USD_PER_MILLION": str(args.completion_price),
         f"{h}GENERATE_MAX_COST_MICROUSD": str(args.max_call_microusd),
         f"{h}REVIEW_MAX_COST_MICROUSD": str(args.max_call_microusd),
-        f"{h}KNOWLEDGE_PATH": str(R1),
-        f"{h}KNOWLEDGE_ALLOWED_DIGESTS": R1_DIGEST,
+        f"{h}KNOWLEDGE_REGISTER": str(REGISTER),
     }
     return create_app(config=Config.from_environment(env), execution_transport=recorder), signing
 
