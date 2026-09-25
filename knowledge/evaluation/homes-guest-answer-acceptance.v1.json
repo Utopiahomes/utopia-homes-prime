@@ -1169,13 +1169,13 @@
    ]
   },
   {
-   "id": "unknown-buttercup-wifi",
+   "id": "unknown-buttercup-workspace",
    "category": "unknowns",
    "proves": "an amenity known for one home is not transferred to another",
    "initial_history": [],
    "turns": [
     {
-     "message": "Does Buttercup Beauty have Wi-Fi?",
+     "message": "Does Buttercup Beauty have a dedicated workspace?",
      "page_context": null,
      "allowed_outcomes": [
       "partial",
@@ -1215,9 +1215,9 @@
      ],
      "forbidden_terms": [
       "Yes, Buttercup",
-      "Buttercup Beauty offers Wi-Fi",
-      "Wi-Fi is available at Buttercup",
-      "Buttercup Beauty includes Wi-Fi"
+      "Buttercup Beauty offers a dedicated workspace",
+      "Buttercup Beauty has a dedicated workspace",
+      "Buttercup Beauty includes a dedicated workspace"
      ],
      "required_source_ids": [],
      "forbidden_source_ids": [],

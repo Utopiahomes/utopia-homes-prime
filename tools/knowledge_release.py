@@ -114,7 +114,9 @@ def command_record(args: argparse.Namespace) -> None:
             "note": args.note,
         }
     )
-    REGISTER.write_text(json.dumps(register, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    REGISTER.write_text(
+        json.dumps(register, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n"
+    )
     print(f"recorded {args.release_id} ({result['canonical_digest']})")
 
 

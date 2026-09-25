@@ -354,14 +354,16 @@ def main() -> None:
     summary = summarize(previous, corpus, release_id)
     print(summary)
     if args.summary:
-        args.summary.write_text(summary + "\n", encoding="utf-8")
+        args.summary.write_text(summary + "\n", encoding="utf-8", newline="\n")
     if not args.propose:
         github_output(changed="true", release_id=release_id)
         return
 
     path = ROOT / "knowledge" / f"r{n}" / f"utopia-public-knowledge.r{n}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(corpus, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    # LF on every platform: the register records this file's exact bytes.
+    text = json.dumps(corpus, ensure_ascii=False, indent=1) + "\n"
+    path.write_text(text, encoding="utf-8", newline="\n")
     try:
         knowledge_release.command_record(
             argparse.Namespace(

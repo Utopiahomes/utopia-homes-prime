@@ -594,19 +594,20 @@ C += [
         ],
     ),
     conv(
-        "unknown-buttercup-wifi",
+        "unknown-buttercup-workspace",
         "unknowns",
         "an amenity known for one home is not transferred to another",
         [
             turn(
-                "Does Buttercup Beauty have Wi-Fi?",
+                # The Shamrock lists a dedicated workspace; Buttercup Beauty does not.
+                "Does Buttercup Beauty have a dedicated workspace?",
                 ["partial", "answered"],
                 groups=[NO_INFO],
                 forbid=[
                     "Yes, Buttercup",
-                    "Buttercup Beauty offers Wi-Fi",
-                    "Wi-Fi is available at Buttercup",
-                    "Buttercup Beauty includes Wi-Fi",
+                    "Buttercup Beauty offers a dedicated workspace",
+                    "Buttercup Beauty has a dedicated workspace",
+                    "Buttercup Beauty includes a dedicated workspace",
                 ],
             )
         ],
