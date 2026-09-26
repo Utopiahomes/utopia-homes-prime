@@ -12,6 +12,7 @@ from fixtures.env import build_env
 from fixtures.keys import generate_test_keypair
 
 from utopia_homes_prime.business_api.api import create_app
+from utopia_homes_prime.business_core.knowledge_items import MemoryKnowledgeItemStore
 from utopia_homes_prime.business_core.records import PropertyRecord
 from utopia_homes_prime.business_core.store import (
     InvalidChange,
@@ -34,7 +35,11 @@ def client():
         "UTOPIA_BUSINESS_LUCY_TOKEN": TOKEN,
         "UTOPIA_BUSINESS_SEED_PATH": str(SEED),
     }
-    app = create_app(config=Config.from_environment(env), business_store=MemoryPropertyStore())
+    app = create_app(
+        config=Config.from_environment(env),
+        business_store=MemoryPropertyStore(),
+        knowledge_store=MemoryKnowledgeItemStore(),
+    )
     with TestClient(app) as c:
         yield c
 

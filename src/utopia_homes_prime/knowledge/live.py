@@ -17,6 +17,7 @@ from collections.abc import Callable
 from datetime import UTC, date, datetime
 from typing import Any
 
+from utopia_homes_prime.business_core.knowledge_items import KnowledgeItemStore
 from utopia_homes_prime.business_core.records import public_feed
 from utopia_homes_prime.business_core.store import PropertyStore
 from utopia_homes_prime.knowledge.builder import build_corpus
@@ -38,11 +39,13 @@ class LiveKnowledgeProjection:
         base_document: dict[str, Any],
         *,
         approved_hostnames: frozenset[str],
+        items: KnowledgeItemStore | None = None,
         refresh_seconds: float = 15.0,
         monotonic: Callable[[], float] = time.monotonic,
         today: Callable[[], date] = lambda: datetime.now(UTC).date(),
     ) -> None:
         self._store = store
+        self._items = items
         self._base = base_document
         self.approved_hostnames = approved_hostnames
         self._refresh_seconds = refresh_seconds
@@ -60,10 +63,22 @@ class LiveKnowledgeProjection:
             if self._current is not None and now - self._checked_at < self._refresh_seconds:
                 return self._current
             try:
-                version = self._store.version()
+                version = self._store.version() + (
+                    "|" + self._items.version() if self._items is not None else ""
+                )
                 if self._current is None or version != self._version:
                     feed = public_feed(self._store.all())
-                    corpus = build_corpus(feed, self._base, self._corpus, self._today())
+                    approved = (
+                        [
+                            i.model_dump(mode="json")
+                            for i in self._items.search(
+                                audiences=("public",), statuses=("active",), limit=100_000
+                            )
+                        ]
+                        if self._items is not None
+                        else []
+                    )
+                    corpus = build_corpus(feed, self._base, self._corpus, self._today(), approved)
                     digest = canonical_corpus_digest(corpus)
                     self._current = KnowledgeProjection.from_document(
                         corpus,
@@ -88,8 +103,8 @@ class LiveKnowledgeProjection:
     def eligibility_token(self) -> str:
         return self._projection().eligibility_token
 
-    def effective(self, observed_at: datetime) -> EffectiveKnowledge:
-        return self._projection().effective(observed_at)
+    def effective(self, observed_at: datetime, *, enforce_cap: bool = True) -> EffectiveKnowledge:
+        return self._projection().effective(observed_at, enforce_cap=enforce_cap)
 
     def approved_destinations(self) -> frozenset[str]:
         return self._projection().approved_destinations()

@@ -311,24 +311,47 @@ def test_withdrawn_knowledge_is_absent_from_model_context(tmp_path):
     assert response.json()["error"]["code"] == "temporarily_unavailable"
 
 
-def test_oversized_evidence_packet_fails_closed_without_execution(tmp_path):
+def test_a_corpus_over_64_entries_still_answers_from_a_selected_packet(tmp_path):
+    """Knowledge may grow past the 64-ID evidence limit; each answer selects its own packet of at
+    most 64 entries (the page's home first), so the model never sees an oversized enum."""
     from fixtures.homes_knowledge import padded_corpus, write_corpus
 
     stage = Stage2(tmp_path)
     oversized = tmp_path / "oversized"
     oversized.mkdir()
-    path, digest = write_corpus(oversized, padded_corpus(66))
+    path, digest = write_corpus(oversized, padded_corpus(90))
     env = dict(stage.harness.env)
     env["GUEST_ANSWER_PROVIDER_HOMES_PRIME_KNOWLEDGE_PATH"] = str(path)
     env["GUEST_ANSWER_PROVIDER_HOMES_PRIME_KNOWLEDGE_ALLOWED_DIGESTS"] = digest
     app = create_app(
         config=Config.from_environment(env), execution_transport=stage.fake.transport()
     )
+    stage.fake.script(GENERATE, success(HARBOR_CAPACITY_DRAFT))
+    stage.fake.script(REVIEW, success(SUPPORTED))
+    body = _body(
+        page_context={
+            "path": "/stays/harbor-light",
+            "subject_type": "property",
+            "subject_id": "harbor-light",
+        }
+    )
     with TestClient(app) as client:
-        response = client.post(ENDPOINT, json=_body(), headers=stage.headers())
-    assert response.status_code == 503
-    assert response.json()["error"]["code"] == "temporarily_unavailable"
-    assert stage.fake.attempts == []
+        response = client.post(ENDPOINT, json=body, headers=stage.headers())
+    assert response.status_code == 200, response.text
+
+    def enums(node):
+        if isinstance(node, dict):
+            if isinstance(node.get("enum"), list):
+                yield node["enum"]
+            for value in node.values():
+                yield from enums(value)
+        elif isinstance(node, list):
+            for value in node:
+                yield from enums(value)
+
+    generate = next(a for a in stage.fake.attempts if a.profile_id == GENERATE)
+    sizes = [len(e) for e in enums(generate.document["output"])]
+    assert sizes and max(sizes) <= 64
 
 
 def test_homes_prime_engine_runs_in_production_when_selected(tmp_path):

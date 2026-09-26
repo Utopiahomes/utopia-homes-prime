@@ -71,11 +71,11 @@ def id_keys(properties: list[dict[str, Any]]) -> dict[str, str]:
     }
 
 
-def property_entries(p: dict[str, Any], key: str) -> list[dict[str, Any]]:
+def _common(p: dict[str, Any], key: str) -> dict[str, Any]:
+    """The fields every entry about this home shares: its facts, page source, and page link."""
     name, slug = p["name"], p["slug"]
-    nick = _nick(p)
     href = f"{SITE}/stays/{slug}"
-    common = {
+    return {
         "service_line": "homes",
         "route": "property",
         "property_slug": slug,
@@ -84,6 +84,28 @@ def property_entries(p: dict[str, Any], key: str) -> list[dict[str, Any]]:
         "links": [{"id": f"{key}-page-link", "label": f"Explore {name}", "href": href}],
     }
 
+
+def _stay_rules(p: dict[str, Any]) -> str | None:
+    parts = []
+    if p.get("check_in_time"):
+        parts.append(f"check-in is at {p['check_in_time']}")
+    if p.get("check_out_time"):
+        parts.append(f"checkout is at {p['check_out_time']}")
+    if p.get("min_age"):
+        parts.append(f"groups must be {p['min_age']} or older unless families with children")
+    if p.get("min_stay"):
+        parts.append(f"minimum stay: {p['min_stay'].rstrip('.')}")
+    if not parts:
+        return None
+    text = "; ".join(parts)
+    return f"At {p['name']}, {text}."
+
+
+def property_entries(p: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    name = p["name"]
+    nick = _nick(p)
+    common = _common(p, key)
+
     capacity = [f"welcomes up to {p['max_guests']} guests"]
     rooms = [
         f"{_number(p[k])} {label}"
@@ -91,6 +113,9 @@ def property_entries(p: dict[str, Any], key: str) -> list[dict[str, Any]]:
         if p.get(k) is not None
     ]
     capacity.append(f"has {_series(rooms)}")
+    layout = "; ".join(
+        f"{r['room']}: {_series(r['beds'])}" for r in p.get("beds_by_room") or [] if r.get("beds")
+    )
 
     amenity_text = " ".join(
         f"{group['name']}: {_series([_in_sentence(a) for a in group['amenities']])}."
@@ -120,7 +145,7 @@ def property_entries(p: dict[str, Any], key: str) -> list[dict[str, Any]]:
             "capacity",
             "fact",
             f"{name} capacity",
-            f"{name} {' and '.join(capacity)}.",
+            f"{name} {' and '.join(capacity)}." + (f" Bedrooms: {layout}." if layout else ""),
             [f"{nick} size", f"{nick} sleeps", "large group", "people"],
             ["capacity", "bedrooms", "bathrooms"],
             True,
@@ -171,6 +196,19 @@ def property_entries(p: dict[str, Any], key: str) -> list[dict[str, Any]]:
             True,
         ),
     ]
+    rules = _stay_rules(p)
+    if rules:
+        specs.append(
+            (
+                "stay-rules",
+                "policy",
+                f"{name} check-in, checkout, and stay rules",
+                rules,
+                ["arrive", "arrival time", "leave", "departure", "age", "minimum nights"],
+                ["check-in", "checkout", "rules"],
+                True,
+            )
+        )
     entries = []
     for suffix, kind, title, text, aliases, topics, direct in specs:
         if suffix == "highlights" and not p["unique_features"]:
@@ -194,16 +232,78 @@ def collection_text(properties: list[dict[str, Any]]) -> str:
     states = {p["state"] for p in properties}
     if len(states) == 1:
         places = [f"{p['name']} in {p['city']}" for p in properties]
-        return f"The current Utopia Homes collection includes {_series(places)}, {states.pop()}."
-    places = [f"{p['name']} in {p['city']}, {p['state']}" for p in properties]
-    return f"The current Utopia Homes collection includes {_series(places)}."
+        text = f"The current Utopia Homes collection includes {_series(places)}, {min(states)}."
+    else:
+        places = [f"{p['name']} in {p['city']}, {p['state']}" for p in properties]
+        text = f"The current Utopia Homes collection includes {_series(places)}."
+    if len(text) <= 1500:
+        return text
+    # Too many homes to name in one entry: each home's own entries carry its name and town.
+    towns = sorted({f"{p['city']}, {p['state']}" for p in properties})
+    return (
+        f"The current Utopia Homes collection includes {len(properties)} homes in "
+        f"{_series(towns[:20])}{' and more' if len(towns) > 20 else ''}."
+    )
+
+
+_ITEM_KINDS = {"fact": "fact", "faq": "fact", "policy": "policy", "place": "description"}
+GENERAL_SOURCE = {"id": "utopia-home", "label": "Utopia Homes", "href": f"{SITE}/"}
+
+
+def item_entries(
+    items: list[dict[str, Any]], properties: list[dict[str, Any]], keys: dict[str, str]
+) -> list[dict[str, Any]]:
+    """Approved public knowledge items as guest-knowledge entries. Items for a home that is not
+    active are left out, and only public, active items may ever be passed in."""
+    by_slug = {p["slug"]: p for p in properties}
+    entries = []
+    for item in items:
+        if item["audience"] != "public" or item["status"] != "active":
+            raise FeedError("only active public knowledge items can reach guest knowledge")
+        kind = _ITEM_KINDS.get(item["kind"])
+        if kind is None:
+            continue  # playbooks and other internal kinds never become guest knowledge
+        slug = item.get("property_slug")
+        if slug is not None:
+            p = by_slug.get(slug)
+            if p is None:
+                continue
+            placement = _common(p, keys[slug])
+        else:
+            placement = {
+                "service_line": "general",
+                "route": "general",
+                "source": GENERAL_SOURCE,
+                "links": [],
+            }
+        entry = {
+            "id": item["id"],
+            "kind": kind,
+            "title": item["title"],
+            "approved_text": item["text"],
+            "aliases": [],
+            "topics": [item["topic"]],
+            "direct_answer": True,
+            **placement,
+        }
+        if item.get("effective_from"):
+            entry["effective_from"] = item["effective_from"]
+        if item.get("effective_until"):
+            entry["effective_until"] = item["effective_until"]
+        entries.append(entry)
+    return entries
 
 
 def build_corpus(
-    feed: dict[str, Any], base: dict[str, Any], previous: dict[str, Any] | None, today: date
+    feed: dict[str, Any],
+    base: dict[str, Any],
+    previous: dict[str, Any] | None,
+    today: date,
+    items: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """The next corpus. An entry whose content is unchanged keeps its previous effective time, so
-    an unchanged website produces byte-identical knowledge and no new release."""
+    an unchanged website produces byte-identical knowledge and no new release. `items` are the
+    approved public knowledge items; an item's own effective dates are kept."""
     entries: list[dict[str, Any]] = []
     for entry in base["entries"]:
         entry = dict(entry)
@@ -213,11 +313,16 @@ def build_corpus(
     keys = id_keys(feed["properties"])
     for p in feed["properties"]:
         entries.extend(property_entries(p, keys[p["slug"]]))
+    dated = {i["id"] for i in items or [] if i.get("effective_from")}
+    entries.extend(item_entries(items or [], feed["properties"], keys))
 
     before = {e["id"]: e for e in (previous or {}).get("entries", [])}
     stamp = f"{today.isoformat()}T00:00:00Z"
     result = []
     for entry in entries:
+        if entry["id"] in dated:
+            result.append(entry)
+            continue
         entry.pop("effective_from", None)
         old = before.get(entry["id"])
         unchanged = old is not None and {k: v for k, v in old.items() if k != "effective_from"} == {

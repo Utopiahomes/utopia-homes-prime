@@ -130,6 +130,54 @@ class ApprovedLink:
     kind: Literal["open_internal_link", "contact_utopia"]
 
 
+SUMMARY_TOPICS = frozenset({"overview", "capacity", "amenities", "pets"})
+_STOPWORDS = frozenset(
+    {
+        "the", "and", "for", "are", "was", "can", "you", "this", "that", "with", "does",
+        "how", "what", "when", "where", "which", "who", "there", "have", "has", "our",
+        "your", "any",
+    }
+)  # fmt: skip
+
+
+def _words(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z0-9]+", text.lower()) if len(w) > 2} - _STOPWORDS
+
+
+def _score(entry: KnowledgeEntry, words: set[str]) -> int:
+    haystack = _words(" ".join([entry.title, entry.approved_text, *entry.aliases, *entry.topics]))
+    return len(words & haystack) + (2 if words & _words(" ".join(entry.topics)) else 0)
+
+
+def select_anchors(labels: dict[str, str], subject_id: str | None, texts: list[str]) -> set[str]:
+    """Homes this conversation is about: the page's home plus homes named in the text, by full
+    name or by distinctive first word ("Buttercup", "Shamrock")."""
+    anchors = {subject_id} if subject_id in labels else set()
+    joined = " ".join(texts).lower()
+    for slug, label in labels.items():
+        name = re.sub(r"^the\s+", "", label.lower())
+        first = name.split()[0] if name.split() else ""
+        for term in {name, first if len(first) >= 5 else ""} - {""}:
+            if re.search(r"(?<![a-z])" + re.escape(term) + r"(?![a-z])", joined):
+                anchors.add(slug)
+    return anchors
+
+
+def _links_for(entries: dict[str, KnowledgeEntry]) -> dict[str, ApprovedLink]:
+    links: dict[str, ApprovedLink] = {}
+    for entry in sorted(entries.values(), key=lambda item: item.id):
+        kind: Literal["open_internal_link", "contact_utopia"] = (
+            "contact_utopia" if entry.kind == "call_to_action" else "open_internal_link"
+        )
+        for link in entry.links:
+            candidate = ApprovedLink(link.id, link.label, link.href, kind)
+            existing = links.get(link.id)
+            if existing is not None and existing != candidate:
+                raise KnowledgeUnavailable("approved link identifier is ambiguous")
+            links[link.id] = candidate
+    return links
+
+
 @dataclass(frozen=True, slots=True)
 class EffectiveKnowledge:
     """The exact evidence set for one answer: effective, non-withdrawn entries at one instant."""
@@ -138,15 +186,58 @@ class EffectiveKnowledge:
     eligibility_token: str
     entries_by_id: dict[str, KnowledgeEntry]
     links_by_id: dict[str, ApprovedLink]
+    all_property_labels: dict[str, str] | None = None
+    """Set on a selected packet: the labels of every home, not just the selected ones, so the
+    wrong-property check still recognizes a home whose entries were not selected."""
 
     @property
     def property_labels(self) -> dict[str, str]:
         """property_slug -> approved display label, for wrong-property checks."""
+        if self.all_property_labels is not None:
+            return self.all_property_labels
         labels: dict[str, str] = {}
         for entry in self.entries_by_id.values():
             if entry.property_slug is not None:
                 labels.setdefault(entry.property_slug, entry.source.label)
         return labels
+
+    def select(self, *, subject_id: str | None, texts: list[str]) -> EffectiveKnowledge:
+        """The evidence packet for one answer, at most 64 entries and links.
+
+        A pure function of (knowledge, request), so a replayed request selects the same packet:
+        1. Anchor homes: the page's property, plus any home named in the message or history.
+        2. Anchored: every entry for the anchor homes, plus all general entries.
+           Unanchored: general entries plus each home's summary entries (overview, capacity,
+           amenities, pets), which answer "which home sleeps 20 / has a pool / takes dogs".
+        3. Over the cap: keep the entries that best match the question's words.
+        """
+        labels = self.property_labels
+        anchors = select_anchors(labels, subject_id, texts)
+        entries = self.entries_by_id.values()
+        if anchors:
+            chosen = [e for e in entries if e.property_slug is None or e.property_slug in anchors]
+        else:
+            chosen = [
+                e
+                for e in entries
+                if e.property_slug is None or SUMMARY_TOPICS.intersection(e.topics)
+            ]
+        if len(chosen) > MAX_ADMITTED_IDS:
+            words = _words(" ".join(texts[-1:]))
+            chosen.sort(key=lambda e: (-_score(e, words), e.id))
+            chosen = chosen[:MAX_ADMITTED_IDS]
+        selected = {e.id: e for e in chosen}
+        links = _links_for(selected)
+        while len(links) > MAX_ADMITTED_IDS:  # only possible with many links per entry
+            selected.pop(max(selected))
+            links = _links_for(selected)
+        return EffectiveKnowledge(
+            release_id=self.release_id,
+            eligibility_token=self.eligibility_token,
+            entries_by_id=selected,
+            links_by_id=links,
+            all_property_labels=labels,
+        )
 
     def context_packet(self) -> str:
         packet_entries = []
@@ -276,7 +367,9 @@ class KnowledgeProjection:
         if parsed.hostname not in self.approved_hostnames or parsed.fragment or parsed.username:
             raise KnowledgeUnavailable("approved reference URL uses an unapproved destination")
 
-    def effective(self, observed_at: datetime) -> EffectiveKnowledge:
+    def effective(self, observed_at: datetime, *, enforce_cap: bool = True) -> EffectiveKnowledge:
+        """Every effective entry. With `enforce_cap=False` the set may exceed 64; callers must then
+        `select()` a packet per answer before it reaches a model."""
         entries = {
             entry.id: entry
             for entry in self._entries
@@ -284,18 +377,8 @@ class KnowledgeProjection:
         }
         if not entries:
             raise KnowledgeUnavailable("no effective public knowledge is available")
-        links: dict[str, ApprovedLink] = {}
-        for entry in sorted(entries.values(), key=lambda item: item.id):
-            kind: Literal["open_internal_link", "contact_utopia"] = (
-                "contact_utopia" if entry.kind == "call_to_action" else "open_internal_link"
-            )
-            for link in entry.links:
-                candidate = ApprovedLink(link.id, link.label, link.href, kind)
-                existing = links.get(link.id)
-                if existing is not None and existing != candidate:
-                    raise KnowledgeUnavailable("approved link identifier is ambiguous")
-                links[link.id] = candidate
-        if len(entries) > MAX_ADMITTED_IDS or len(links) > MAX_ADMITTED_IDS:
+        links = _links_for(entries)
+        if enforce_cap and (len(entries) > MAX_ADMITTED_IDS or len(links) > MAX_ADMITTED_IDS):
             raise KnowledgeUnavailable("admitted evidence packet exceeds 64 identifiers")
         return EffectiveKnowledge(
             release_id=self.release_id,

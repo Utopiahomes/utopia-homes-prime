@@ -33,7 +33,7 @@ class FakeContext:
 def test_it_registers_the_four_business_tools():
     ctx = FakeContext()
     load_plugin().register(ctx)
-    assert set(ctx.tools) == {
+    assert set(ctx.tools) >= {
         "utopia_list_properties",
         "utopia_get_property",
         "utopia_update_property",

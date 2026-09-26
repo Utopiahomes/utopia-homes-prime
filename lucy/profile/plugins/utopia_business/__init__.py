@@ -93,6 +93,98 @@ HISTORY_SCHEMA = {
 }
 
 
+_AUDIENCE = {
+    "type": "string",
+    "enum": ["public", "booked_guest", "internal"],
+    "description": (
+        "public: anyone, incl. website visitors. booked_guest: only guests with a booking "
+        "(e.g. trash day, checkout steps). internal: Ray, Meghan and Lucy only (e.g. breaker "
+        "location, vendors, business decisions)."
+    ),
+}
+
+SEARCH_KNOWLEDGE_SCHEMA = {
+    "name": "utopia_search_knowledge",
+    "description": (
+        "Search Utopia's knowledge items (everything beyond page facts: how things work, local "
+        "tips, internal notes, business decisions, and proposed items awaiting review)."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "slug": {**_SLUG, "description": "Limit to one property (omit for all and general)."},
+            "query": {"type": "string", "maxLength": 100, "description": "Words to match."},
+            "status": {"type": "string", "enum": ["proposed", "active", "withdrawn"]},
+            "audience": _AUDIENCE,
+        },
+        "additionalProperties": False,
+    },
+}
+
+ADD_KNOWLEDGE_SCHEMA = {
+    "name": "utopia_add_knowledge",
+    "description": (
+        "Save a piece of knowledge the operator told you, active and confirmed. Use for "
+        "anything that is not a property page field. Never save door/lock codes, Wi-Fi "
+        "passwords, phone numbers, emails, or guest personal details."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "slug": {**_SLUG, "description": "The property, or omit for Utopia in general."},
+            "audience": _AUDIENCE,
+            "kind": {"type": "string", "enum": ["fact", "policy", "faq", "place", "playbook"]},
+            "topic": {"type": "string", "minLength": 1, "maxLength": 60},
+            "title": {"type": "string", "minLength": 1, "maxLength": 160},
+            "text": {"type": "string", "minLength": 1, "maxLength": 2000},
+        },
+        "required": ["audience", "kind", "topic", "title", "text"],
+        "additionalProperties": False,
+    },
+}
+
+UPDATE_KNOWLEDGE_SCHEMA = {
+    "name": "utopia_update_knowledge",
+    "description": (
+        "Change, approve (status active), or withdraw (status withdrawn) a knowledge item, as "
+        "the operator decided. The change is recorded as confirmed by the operator."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "item_id": {"type": "string", "pattern": "^ki-[a-z0-9]{12}$"},
+            "changes": {
+                "type": "object",
+                "description": "Any of: status, audience, kind, topic, title, text.",
+            },
+        },
+        "required": ["item_id", "changes"],
+        "additionalProperties": False,
+    },
+}
+
+CONFIRM_SCHEMA = {
+    "name": "utopia_confirm_property",
+    "description": (
+        "Record that the operator checked property fields and they are correct as they are "
+        "(no change). Use when Ray says a fact shown to him is right."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "slug": _SLUG,
+            "fields": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        },
+        "required": ["slug", "fields"],
+        "additionalProperties": False,
+    },
+}
+
+
+def _operator() -> str:
+    return f"{os.environ.get('UTOPIA_LUCY_OPERATOR_NAME', 'operator')} via Utopia Lucy"
+
+
 def _call(method: str, path: str, payload: dict[str, Any] | None = None) -> str:
     base = os.environ["UTOPIA_BUSINESS_API_URL"].rstrip("/")
     request = urllib.request.Request(
@@ -125,13 +217,12 @@ def _get(args: dict[str, Any], **_: Any) -> str:
 
 
 def _update(args: dict[str, Any], **_: Any) -> str:
-    operator = os.environ.get("UTOPIA_LUCY_OPERATOR_NAME", "operator")
     return _call(
         "PATCH",
         f"/internal/v1/properties/{urllib.parse.quote(str(args['slug']))}",
         {
             "changes": args.get("changes") or {},
-            "changed_by": f"{operator} via Utopia Lucy",
+            "changed_by": _operator(),
             "reason": str(args.get("reason") or "")[:500],
         },
     )
@@ -143,12 +234,62 @@ def _history(args: dict[str, Any], **_: Any) -> str:
     return _call("GET", f"/internal/v1/properties/{slug}/history?limit={limit}")
 
 
+def _search_knowledge(args: dict[str, Any], **_: Any) -> str:
+    params = {
+        "property": args.get("slug"),
+        "q": args.get("query"),
+        "status": args.get("status"),
+        "audience": args.get("audience"),
+        "limit": 40,
+    }
+    query = urllib.parse.urlencode({k: v for k, v in params.items() if v})
+    return _call("GET", f"/internal/v1/knowledge?{query}")
+
+
+def _add_knowledge(args: dict[str, Any], **_: Any) -> str:
+    item = {
+        "property_slug": args.get("slug"),
+        "audience": args.get("audience"),
+        "kind": args.get("kind"),
+        "topic": args.get("topic"),
+        "title": args.get("title"),
+        "text": args.get("text"),
+        "status": "active",
+        "source_note": "stated by the operator in Telegram",
+    }
+    return _call(
+        "POST",
+        "/internal/v1/knowledge",
+        {"item": item, "created_by": _operator(), "confirm": True},
+    )
+
+
+def _update_knowledge(args: dict[str, Any], **_: Any) -> str:
+    return _call(
+        "PATCH",
+        f"/internal/v1/knowledge/{urllib.parse.quote(str(args['item_id']))}",
+        {"changes": args.get("changes") or {}, "changed_by": _operator(), "confirm": True},
+    )
+
+
+def _confirm(args: dict[str, Any], **_: Any) -> str:
+    return _call(
+        "POST",
+        f"/internal/v1/properties/{urllib.parse.quote(str(args['slug']))}/confirm",
+        {"fields": list(args.get("fields") or []), "confirmed_by": _operator()},
+    )
+
+
 def register(ctx: Any) -> None:
     for schema, handler, emoji in (
         (LIST_SCHEMA, _list, "🏠"),
         (GET_SCHEMA, _get, "🔎"),
         (UPDATE_SCHEMA, _update, "✏️"),
         (HISTORY_SCHEMA, _history, "📜"),
+        (SEARCH_KNOWLEDGE_SCHEMA, _search_knowledge, "📚"),
+        (ADD_KNOWLEDGE_SCHEMA, _add_knowledge, "➕"),
+        (UPDATE_KNOWLEDGE_SCHEMA, _update_knowledge, "🗂️"),
+        (CONFIRM_SCHEMA, _confirm, "✅"),
     ):
         ctx.register_tool(
             name=schema["name"],

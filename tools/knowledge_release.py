@@ -53,7 +53,8 @@ def check(path: Path, hostnames: frozenset[str]) -> dict[str, Any]:
         withdrawn_ids=frozenset(),
         approved_hostnames=hostnames,
     )
-    effective = projection.effective(datetime.now(UTC))
+    # Answers select at most 64 entries each, so a release itself may be larger.
+    effective = projection.effective(datetime.now(UTC), enforce_cap=False)
     return {
         "file": str(path),
         "file_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),

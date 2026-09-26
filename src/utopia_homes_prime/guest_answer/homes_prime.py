@@ -679,6 +679,17 @@ class PipelineTelemetry:
     review_attempts: int = 0
 
 
+def select_for_request(
+    knowledge: EffectiveKnowledge, request: dict[str, Any], message_content: str
+) -> EffectiveKnowledge:
+    """The answer's evidence packet: anchored on the page's home and any home the guest names in
+    this conversation, capped at 64 (see EffectiveKnowledge.select)."""
+    page = request.get("page_context") or {}
+    subject_id = page.get("subject_id") if page.get("subject_type") == "property" else None
+    history = [t.get("content", "") for t in request.get("history") or []]
+    return knowledge.select(subject_id=subject_id, texts=[*history, message_content])
+
+
 class HomesPrimeEngine:
     name: Final = "homes-prime-candidate"
 
@@ -713,7 +724,11 @@ class HomesPrimeEngine:
         review_budget_s = (settings.review.ceiling_ms + settings.transit_allowance_ms) / 1000
 
         try:
-            knowledge = self._projection.effective(self._wall_clock())
+            knowledge = select_for_request(
+                self._projection.effective(self._wall_clock(), enforce_cap=False),
+                request,
+                message_content,
+            )
         except KnowledgeUnavailable:
             self.last_telemetry = PipelineTelemetry("knowledge", "unavailable")
             raise TemporarilyUnavailableError() from None

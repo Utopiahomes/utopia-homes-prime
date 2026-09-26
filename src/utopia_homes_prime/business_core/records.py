@@ -21,6 +21,13 @@ class AmenityGroup(BaseModel):
     amenities: list[str] = Field(max_length=40)
 
 
+class Room(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    room: str = Field(min_length=1, max_length=80)
+    beds: list[str] = Field(max_length=12)
+
+
 class PropertyRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -40,6 +47,12 @@ class PropertyRecord(BaseModel):
     pet_policy: str = Field(max_length=400)
     parking: str = Field(max_length=400)
     accessibility: str = Field(max_length=600)
+    # Stay rules and layout guests ask about most (Airbnb message analysis, 2026-09-26).
+    check_in_time: str | None = Field(default=None, max_length=40)
+    check_out_time: str | None = Field(default=None, max_length=40)
+    min_age: int | None = Field(default=None, ge=18, le=30)
+    min_stay: str | None = Field(default=None, max_length=300)
+    beds_by_room: list[Room] = Field(default_factory=list, max_length=20)
 
 
 EDITABLE_FIELDS = frozenset(PropertyRecord.model_fields) - {"slug"}

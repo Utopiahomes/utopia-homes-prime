@@ -15,6 +15,11 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from utopia_homes_prime.business_core.knowledge_items import (
+    InvalidItem,
+    ItemNotFound,
+    KnowledgeItemStore,
+)
 from utopia_homes_prime.business_core.records import public_feed
 from utopia_homes_prime.business_core.store import (
     Change,
@@ -32,6 +37,30 @@ class PropertyUpdate(BaseModel):
     changes: dict[str, Any] = Field(min_length=1, max_length=20)
     changed_by: str = Field(min_length=1, max_length=120)
     reason: str = Field(min_length=1, max_length=500)
+
+
+class ConfirmFields(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    fields: list[str] = Field(min_length=1, max_length=30)
+    confirmed_by: str = Field(min_length=1, max_length=120)
+
+
+class ItemCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    item: dict[str, Any]
+    created_by: str = Field(min_length=1, max_length=120)
+    confirm: bool = False
+    """True when a person stated this (it is then confirmed); false for extracted proposals."""
+
+
+class ItemUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    changes: dict[str, Any] = Field(min_length=1, max_length=20)
+    changed_by: str = Field(min_length=1, max_length=120)
+    confirm: bool = False
 
 
 def _error(status: int, code: str, message: str) -> JSONResponse:
@@ -53,7 +82,13 @@ def _change(c: Change) -> dict[str, Any]:
     }
 
 
-def register_business_routes(app: FastAPI, *, store: PropertyStore, lucy_token: str) -> None:
+def register_business_routes(
+    app: FastAPI,
+    *,
+    store: PropertyStore,
+    lucy_token: str,
+    items: KnowledgeItemStore | None = None,
+) -> None:
     def authorized(request: Request) -> bool:
         header = request.headers.get("authorization", "")
         return header.startswith("Bearer ") and hmac.compare_digest(
@@ -90,9 +125,28 @@ def register_business_routes(app: FastAPI, *, store: PropertyStore, lucy_token: 
     async def get_property(slug: str) -> JSONResponse:
         try:
             record = await run_in_threadpool(store.get, slug)
+            confirmed = await run_in_threadpool(store.confirmations, slug)
         except PropertyNotFound:
             return _error(404, "not_found", f"no property with slug {slug!r}")
-        return JSONResponse({"property": record.model_dump(mode="json")})
+        return JSONResponse(
+            {
+                "property": record.model_dump(mode="json"),
+                "confirmed": confirmed,
+                "unconfirmed_fields": sorted(set(record.model_dump()) - set(confirmed) - {"slug"}),
+            }
+        )
+
+    @app.post("/internal/v1/properties/{slug}/confirm")
+    async def confirm_property(slug: str, body: ConfirmFields) -> JSONResponse:
+        try:
+            confirmed = await run_in_threadpool(
+                lambda: store.confirm(slug, body.fields, confirmed_by=body.confirmed_by)
+            )
+        except PropertyNotFound:
+            return _error(404, "not_found", f"no property with slug {slug!r}")
+        except InvalidChange as exc:
+            return _error(422, "invalid_change", str(exc))
+        return JSONResponse({"confirmed": confirmed})
 
     @app.patch("/internal/v1/properties/{slug}")
     async def update_property(slug: str, body: PropertyUpdate) -> JSONResponse:
@@ -118,7 +172,55 @@ def register_business_routes(app: FastAPI, *, store: PropertyStore, lucy_token: 
             return _error(404, "not_found", f"no property with slug {slug!r}")
         return JSONResponse({"changes": [_change(c) for c in changes]})
 
+    if items is not None:
+        register_item_routes(app, items)
+
     @app.get("/business/v1/public/properties")
     async def public_properties() -> JSONResponse:
         records = await run_in_threadpool(store.all)
         return JSONResponse(public_feed(records), headers={"Cache-Control": "public, max-age=60"})
+
+
+def register_item_routes(app: FastAPI, items: KnowledgeItemStore) -> None:
+    @app.get("/internal/v1/knowledge")
+    async def search_items(
+        property: str | None = None,
+        audience: str | None = None,
+        status: str | None = None,
+        q: str | None = None,
+        limit: int = 50,
+    ) -> JSONResponse:
+        found = await run_in_threadpool(
+            lambda: items.search(
+                property_slug=property,
+                audiences=tuple(audience.split(",")) if audience else None,
+                statuses=tuple(status.split(",")) if status else None,
+                query=q,
+                limit=max(1, min(limit, 500)),
+            )
+        )
+        return JSONResponse({"items": [i.model_dump(mode="json") for i in found]})
+
+    @app.post("/internal/v1/knowledge")
+    async def create_item(body: ItemCreate) -> JSONResponse:
+        try:
+            item = await run_in_threadpool(
+                lambda: items.create(body.item, created_by=body.created_by, confirm=body.confirm)
+            )
+        except InvalidItem as exc:
+            return _error(422, "invalid_item", str(exc))
+        return JSONResponse({"item": item.model_dump(mode="json")}, status_code=201)
+
+    @app.patch("/internal/v1/knowledge/{item_id}")
+    async def update_item(item_id: str, body: ItemUpdate) -> JSONResponse:
+        try:
+            item = await run_in_threadpool(
+                lambda: items.update(
+                    item_id, body.changes, changed_by=body.changed_by, confirm=body.confirm
+                )
+            )
+        except ItemNotFound:
+            return _error(404, "not_found", f"no knowledge item {item_id!r}")
+        except InvalidItem as exc:
+            return _error(422, "invalid_item", str(exc))
+        return JSONResponse({"item": item.model_dump(mode="json")})

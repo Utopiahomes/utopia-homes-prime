@@ -11,6 +11,7 @@ import pytest
 from fixtures.homes_prime import build_homes_prime_env
 
 from utopia_homes_prime.business_api.api import create_app
+from utopia_homes_prime.business_core.knowledge_items import MemoryKnowledgeItemStore
 from utopia_homes_prime.business_core.records import PropertyRecord
 from utopia_homes_prime.business_core.store import InvalidChange, MemoryPropertyStore
 from utopia_homes_prime.config import Config, ConfigError
@@ -113,4 +114,8 @@ def test_live_mode_starts_with_the_business_core_and_needs_it(tmp_path):
     }
     config = Config.from_environment(env)
     assert config.homes_prime is not None and config.homes_prime.knowledge_live
-    create_app(config=config, business_store=MemoryPropertyStore())
+    create_app(
+        config=config,
+        business_store=MemoryPropertyStore(),
+        knowledge_store=MemoryKnowledgeItemStore(),
+    )

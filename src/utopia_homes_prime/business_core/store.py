@@ -62,8 +62,22 @@ def apply_changes(
     return updated, diff
 
 
+def _check_fields(fields: list[str]) -> None:
+    unknown = set(fields) - EDITABLE_FIELDS
+    if unknown or not fields:
+        raise InvalidChange(f"unknown fields to confirm: {', '.join(sorted(unknown)) or 'none'}")
+
+
 class PropertyStore(Protocol):
+    """`update` confirms the fields it changes (a person stated them); `confirm` records that a
+    person checked fields without changing them. Seeded fields start unconfirmed, so imported
+    evidence can challenge them."""
+
     def all(self) -> list[PropertyRecord]: ...
+    def confirmations(self, slug: str) -> dict[str, dict[str, str]]: ...
+    def confirm(
+        self, slug: str, fields: list[str], *, confirmed_by: str
+    ) -> dict[str, dict[str, str]]: ...
     def get(self, slug: str) -> PropertyRecord: ...
     def update(
         self, slug: str, changes: dict[str, Any], *, changed_by: str, reason: str
@@ -77,7 +91,22 @@ class MemoryPropertyStore:
     def __init__(self) -> None:
         self._records: dict[str, PropertyRecord] = {}
         self._changes: list[Change] = []
+        self._confirmed: dict[str, dict[str, dict[str, str]]] = {}
         self._lock = threading.Lock()
+
+    def confirmations(self, slug: str) -> dict[str, dict[str, str]]:
+        self.get(slug)
+        return dict(self._confirmed.get(slug, {}))
+
+    def confirm(
+        self, slug: str, fields: list[str], *, confirmed_by: str
+    ) -> dict[str, dict[str, str]]:
+        _check_fields(fields)
+        with self._lock:
+            self.get(slug)
+            stamp = {"at": datetime.now(UTC).isoformat(), "by": confirmed_by}
+            self._confirmed.setdefault(slug, {}).update({f: stamp for f in fields})
+            return dict(self._confirmed[slug])
 
     def all(self) -> list[PropertyRecord]:
         return sorted(self._records.values(), key=lambda r: r.name)
@@ -97,6 +126,8 @@ class MemoryPropertyStore:
             made = [Change(slug, f, o, n, changed_by, reason, now) for f, (o, n) in diff.items()]
             self._records[slug] = updated
             self._changes.extend(made)
+            stamp = {"at": now.isoformat(), "by": changed_by}
+            self._confirmed.setdefault(slug, {}).update({f: stamp for f in diff})
             return updated, made
 
     def history(self, slug: str, limit: int = 20) -> list[Change]:
@@ -132,6 +163,7 @@ CREATE TABLE IF NOT EXISTS property_changes (
     changed_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS property_changes_slug ON property_changes (slug, id DESC);
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS confirmed jsonb NOT NULL DEFAULT '{}'::jsonb;
 """
 
 
@@ -175,10 +207,17 @@ class PostgresPropertyStore:
             if not diff:
                 return updated, []
             now = conn.execute("SELECT now()").fetchone()[0]
+            stamp = {"at": now.isoformat(), "by": changed_by}
             conn.execute(
-                "UPDATE properties SET record = %s, updated_at = %s, updated_by = %s "
-                "WHERE slug = %s",
-                (json.dumps(updated.model_dump(mode="json")), now, changed_by, slug),
+                "UPDATE properties SET record = %s, updated_at = %s, updated_by = %s, "
+                "confirmed = confirmed || %s WHERE slug = %s",
+                (
+                    json.dumps(updated.model_dump(mode="json")),
+                    now,
+                    changed_by,
+                    json.dumps({f: stamp for f in diff}),
+                    slug,
+                ),
             )
             made = []
             for field, (old, new) in diff.items():
@@ -190,6 +229,31 @@ class PostgresPropertyStore:
                 )
                 made.append(Change(slug, field, old, new, changed_by, reason, now))
         return updated, made
+
+    def confirmations(self, slug: str) -> dict[str, dict[str, str]]:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT confirmed FROM properties WHERE slug = %s", (slug,)
+            ).fetchone()
+        if row is None:
+            raise PropertyNotFound(slug)
+        return dict(row[0])
+
+    def confirm(
+        self, slug: str, fields: list[str], *, confirmed_by: str
+    ) -> dict[str, dict[str, str]]:
+        _check_fields(fields)
+        with self._connect() as conn:
+            now = conn.execute("SELECT now()").fetchone()[0]
+            stamp = {"at": now.isoformat(), "by": confirmed_by}
+            row = conn.execute(
+                "UPDATE properties SET confirmed = confirmed || %s WHERE slug = %s "
+                "RETURNING confirmed",
+                (json.dumps({f: stamp for f in fields}), slug),
+            ).fetchone()
+        if row is None:
+            raise PropertyNotFound(slug)
+        return dict(row[0])
 
     def history(self, slug: str, limit: int = 20) -> list[Change]:
         self.get(slug)

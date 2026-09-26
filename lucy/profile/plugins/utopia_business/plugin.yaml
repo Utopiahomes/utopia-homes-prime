@@ -8,3 +8,7 @@ provides_tools:
   - utopia_get_property
   - utopia_update_property
   - utopia_property_history
+  - utopia_search_knowledge
+  - utopia_add_knowledge
+  - utopia_update_knowledge
+  - utopia_confirm_property
