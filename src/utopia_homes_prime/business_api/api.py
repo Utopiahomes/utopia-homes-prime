@@ -303,7 +303,9 @@ def _load_homes_prime(
         live = LiveKnowledgeProjection(
             store, base, approved_hostnames=prime.approved_hostnames, items=items
         )
-        live.effective(datetime.now(UTC))  # fail closed at startup if no knowledge can be built
+        # Fail closed at startup if no knowledge can be built. Each answer selects its own packet
+        # within the 64-ID cap, so the whole corpus may exceed it.
+        live.effective(datetime.now(UTC), enforce_cap=False)
         return live, settings
     projection = KnowledgeProjection.load(
         Path(prime.knowledge_path),

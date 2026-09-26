@@ -114,8 +114,14 @@ def test_live_mode_starts_with_the_business_core_and_needs_it(tmp_path):
     }
     config = Config.from_environment(env)
     assert config.homes_prime is not None and config.homes_prime.knowledge_live
-    create_app(
-        config=config,
-        business_store=MemoryPropertyStore(),
-        knowledge_store=MemoryKnowledgeItemStore(),
-    )
+    # More knowledge than one answer's 64-ID packet: startup must still succeed (the production
+    # deploy of 2026-09-26 failed here with 68 entries).
+    items = MemoryKnowledgeItemStore()
+    for i in range(40):
+        items.create(
+            {"property_slug": "buttercup-beauty", "audience": "public", "kind": "faq",
+             "topic": f"topic{i}", "title": f"Detail {i}", "text": f"Buttercup detail {i}.",
+             "status": "active"},
+            created_by="test",
+        )  # fmt: skip
+    create_app(config=config, business_store=MemoryPropertyStore(), knowledge_store=items)
