@@ -30,12 +30,14 @@ _CONFIRMATION = re.compile(r"\bHM[A-Z0-9]{8}\b")
 # Greeting words match any case; the name must be Capitalized (so "hi how are you" is untouched).
 _GREETING = re.compile(
     r"\b((?i:hi|hello|hey|dear|good morning|good afternoon|good evening))"
-    r"\s+([A-Z][a-z'’-]{1,20})\b"
+    r",?\s+([A-Z][a-z'’-]{1,20})\b"
 )
 _SIGNOFF = re.compile(
     r"(?m)^((?i:thanks|thank you|best|cheers|regards|sincerely)[!,.]*\s*)\n?"
-    r"([A-Z][a-z'’-]{1,20})\s*$"
+    r"([A-Z][a-z'’-]{1,20})[ \t]*[!.]*\s*$"
 )
+# A name alone on the last line ("...Thank you!\n\nJordan !"). Over-scrubs a lone "Ok" at worst.
+_LAST_LINE_NAME = re.compile(r"(\n\s*)([A-Z][a-z'’-]{1,20})[ \t]*[!.]*\s*\Z")
 _HOST_NAMES = frozenset({"Meghan", "Meg", "Ray", "Raymond", "Utopia", "Lucy", "There", "All",
                          "Everyone", "Again", "Guys", "Team"})  # fmt: skip
 
@@ -80,6 +82,9 @@ def _scrub(text: str, keep_names: frozenset[str]) -> str:
         lambda m: m.group(0) if m.group(2) in keep_names else f"{m.group(1)} [GUEST]", text
     )
     text = _SIGNOFF.sub(
+        lambda m: m.group(0) if m.group(2) in keep_names else f"{m.group(1)}[GUEST]", text
+    )
+    text = _LAST_LINE_NAME.sub(
         lambda m: m.group(0) if m.group(2) in keep_names else f"{m.group(1)}[GUEST]", text
     )
     return text

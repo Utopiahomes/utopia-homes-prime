@@ -41,8 +41,12 @@ def test_contact_details_and_booking_codes_are_removed():
 def test_guest_names_go_but_host_names_stay():
     assert scrub("Hi Jennifer, the pool is heated!") == "Hi [GUEST], the pool is heated!"
     assert scrub("Hello Meghan, quick question") == "Hello Meghan, quick question"
+    assert scrub("Hello, Brendan, sorry!") == "Hello [GUEST], sorry!"
+    assert scrub("Hi, Meghan! Quick one") == "Hi, Meghan! Quick one"
     assert scrub("hi how are you? Hey there!") == "hi how are you? Hey there!"
     assert scrub("See you soon!\nThanks,\nBrendan").endswith("[GUEST]")
+    assert "Jordan" not in scrub("Is it ready? Thank you!\n\nJordan ! ")
+    assert scrub("See you then!\nMeghan").endswith("Meghan")
 
 
 def test_years_in_dates_are_not_codes():
