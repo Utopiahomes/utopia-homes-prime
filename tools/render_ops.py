@@ -87,6 +87,8 @@ def set_env(service: str, pairs: list[str]) -> None:
         name, sep, value = pair.partition("=")
         if not sep or not re.fullmatch(r"[A-Z][A-Z0-9_]*", name):
             sys.exit(f"expected NAME=VALUE, got {pair!r}")
+        if re.match(r"[A-Za-z]:[/\\]", value):
+            sys.exit(f"{name} is a Windows path ({value}); in Git Bash set MSYS_NO_PATHCONV=1")
         if _SECRET.search(name):
             sys.exit(f"{name} looks like a secret; set it in the Render dashboard")
         _call("PUT", f"/services/{service}/env-vars/{name}", {"value": value})
