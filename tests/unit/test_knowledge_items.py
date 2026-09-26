@@ -160,6 +160,7 @@ def test_stay_rules_and_bed_layout_become_guest_knowledge():
     )
     entries = live.effective(datetime(2026, 9, 27, tzinfo=UTC), enforce_cap=False).entries_by_id
     assert "check-in is at 4:00 PM" in entries["buttercup-stay-rules"].approved_text
+    assert "the person booking must be at least 21" in entries["buttercup-stay-rules"].approved_text
     assert "First-floor king room: 1 king" in entries["buttercup-capacity"].approved_text
 
 

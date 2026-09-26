@@ -92,7 +92,7 @@ def _stay_rules(p: dict[str, Any]) -> str | None:
     if p.get("check_out_time"):
         parts.append(f"checkout is at {p['check_out_time']}")
     if p.get("min_age"):
-        parts.append(f"groups must be {p['min_age']} or older unless families with children")
+        parts.append(f"the person booking must be at least {p['min_age']}")
     if p.get("min_stay"):
         parts.append(f"minimum stay: {p['min_stay'].rstrip('.')}")
     if not parts:
