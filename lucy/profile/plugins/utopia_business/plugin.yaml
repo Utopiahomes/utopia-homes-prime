@@ -16,5 +16,6 @@ provides_tools:
   - utopia_list_work
   - utopia_update_work
   - utopia_guest_queue
+  - utopia_guest_card
   - utopia_answer_guest_card
   - utopia_try_guest_message

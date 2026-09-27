@@ -276,6 +276,17 @@ GUEST_QUEUE_SCHEMA = {
     "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
 }
 
+CARD_ON_SCREEN_SCHEMA = {
+    "name": "utopia_guest_card",
+    "description": (
+        "Show the guest card on Ray's screen right now (Homes Prime sends cards to Telegram "
+        "directly, so you never see them in this chat): the guest's message, the proposed reply "
+        "and its version, priority, and how many are waiting. Check it whenever Ray's message "
+        "could be an answer to a card."
+    ),
+    "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+}
+
 ANSWER_CARD_SCHEMA = {
     "name": "utopia_answer_guest_card",
     "description": (
@@ -517,6 +528,10 @@ def _guest_queue(args: dict[str, Any], **_: Any) -> str:
     return json.dumps({"turns": [{k: t.get(k) for k in keep if t.get(k)} for t in turns]})
 
 
+def _card_on_screen(args: dict[str, Any], **_: Any) -> str:
+    return _call("GET", "/internal/v1/guest/card")
+
+
 def _answer_card(args: dict[str, Any], **_: Any) -> str:
     body: dict[str, Any] = {"action": args.get("action"), "by": _operator()}
     for key in ("text", "turn_id", "version", "categories"):
@@ -565,6 +580,7 @@ def register(ctx: Any) -> None:
         (LIST_WORK_SCHEMA, _list_work, "📋"),
         (UPDATE_WORK_SCHEMA, _update_work, "🔧"),
         (GUEST_QUEUE_SCHEMA, _guest_queue, "📥"),
+        (CARD_ON_SCREEN_SCHEMA, _card_on_screen, "🃏"),
         (ANSWER_CARD_SCHEMA, _answer_card, "✅"),
         (TRY_GUEST_SCHEMA, _try_guest, "🧪"),
     ):

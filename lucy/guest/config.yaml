@@ -96,6 +96,12 @@ platforms:
             A booked guest sent a new message. Read it with guest_context, then answer it with
             send_guest_reply or hand it to the hosts with escalate_to_host.
 
+# Utopia's tools are few, so they are always loaded directly; the default search-describe-call
+# bridge tripled the steps (and the wait) for every answer.
+tools:
+  tool_search:
+    enabled: "off"
+
 toolsets: []
 
 platform_toolsets:
