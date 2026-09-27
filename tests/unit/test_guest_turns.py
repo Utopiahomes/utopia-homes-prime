@@ -104,9 +104,13 @@ def test_a_blocked_draft_comes_back_then_a_good_one_is_queued_and_decided(api):
         "action": "edit", "decided_by": "Meghan",
         "final_text": "Hi! Trash and recycling go out Sunday night. Enjoy!",
         "edit_categories": ["missing_info"], "reason": "recycling too"})  # fmt: skip
-    assert decided.json()["turn"]["state"] == "approved"
+    assert decided.json()["turn"]["state"] == "queued"  # an edit is a new version, not final
+    sent = api.post("/internal/v1/guest/card", headers=LUCY,
+                    json={"action": "send", "by": "Meghan", "turn_id": turn})  # fmt: skip
+    assert sent.json()["status"] == "approved", sent.text
     full = api.get(f"/internal/v1/guest/turns/{turn}", headers=LUCY).json()["turn"]
-    assert len(full["attempts"]) == 2 and full["attempts"][0]["decision"] == "block"
+    assert len(full["attempts"]) == 3 and full["attempts"][0]["decision"] == "block"
+    assert full["attempts"][-1]["author"] == "host" and full["decision"]["edited"] is True
     assert full["decision"]["final_text"].startswith("Hi! Trash and recycling")
 
 
@@ -139,47 +143,3 @@ def test_the_guest_token_must_differ_from_lucys():
     }
     with pytest.raises(ConfigError, match="GUEST_TOKEN"):
         Config.from_environment(env)
-
-
-def desk_with_notes():
-    import json as _json
-
-    from utopia_homes_prime.business_core.guest import GuestDesk, MemoryGuestStore
-    from utopia_homes_prime.business_core.records import PropertyRecord
-    from utopia_homes_prime.business_core.work import MemoryWorkStore, WorkDesk
-
-    seed = _json.loads(
-        (ROOT / "knowledge/business-seed/utopia-properties.seed.json").read_text(encoding="utf-8")
-    )
-    properties = MemoryPropertyStore()
-    properties.seed_if_empty([PropertyRecord.model_validate(p) for p in seed["properties"]])
-    sent: list[str] = []
-    desk = GuestDesk(MemoryGuestStore(), properties, MemoryKnowledgeItemStore(),
-                     WorkDesk(MemoryWorkStore()), notify=sent.append)  # fmt: skip
-    r = desk.create_reservation({"property_slug": "buttercup-beauty", "check_in": "2026-10-02",
-                                 "check_out": "2026-10-05", "guests": 8})  # fmt: skip
-    return desk, r, sent
-
-
-def test_the_hosts_hear_about_every_message_that_needs_them_with_a_proposed_reply():
-    desk, r, sent = desk_with_notes()
-    turn = desk.receive(r.id, "Can we check in at noon?")
-    desk.escalate(turn.id, "exception", "early check-in",
-                  "Hi! Yes, you're welcome to check in at [time].")  # fmt: skip
-    assert len(sent) == 1
-    note = sent[0]
-    assert "Buttercup Beauty" in note and "Can we check in at noon?" in note
-    assert "check in at [time]" in note and note.endswith(f"[{turn.id}]")
-    assert "the reply you want" in note  # a draft with blanks cannot just be sent
-    with pytest.raises(Exception, match="blanks"):
-        desk.decide(turn.id, {"action": "approve", "decided_by": "Ray"})
-    final = "Hi! Yes, you're welcome to check in at 1 PM."
-    done = desk.decide(turn.id, {"action": "edit", "decided_by": "Ray", "final_text": final})
-    assert done.state == "approved" and len(sent) == 1  # deciding does not notify again
-
-
-def test_a_queued_draft_notifies_once_with_send_instructions():
-    desk, r, sent = desk_with_notes()
-    turn = desk.receive(r.id, "Thanks so much!")
-    desk.reply(turn.id, "Hi! You're so welcome, enjoy your stay!", [])
-    assert len(sent) == 1 and 'with "send"' in sent[0]

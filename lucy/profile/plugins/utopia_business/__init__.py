@@ -276,28 +276,32 @@ GUEST_QUEUE_SCHEMA = {
     "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
 }
 
-DECIDE_GUEST_SCHEMA = {
-    "name": "utopia_decide_guest_reply",
+ANSWER_CARD_SCHEMA = {
+    "name": "utopia_answer_guest_card",
     "description": (
-        "Record Ray's decision on a queued guest reply: approve it as written, edit it (give the "
-        "final text and what the edit fixed), or reject it. Use exactly Ray's words for edits."
+        "Record Ray's answer to a guest card. It applies to the card on screen (the latest one "
+        "sent) unless Ray replied to a specific card: then pass that card's turn_id and version "
+        "from the [gt-... vN] line he replied to. send: approve the wording shown. revise: the "
+        "new wording (Ray's exact words, or your rewrite of his instruction); the card is sent "
+        "back to him and only his 'send' finalizes it. reject. undo: reopen the last answered "
+        "card."
     ),
     "parameters": {
         "type": "object",
         "properties": {
+            "action": {"type": "string", "enum": ["send", "revise", "reject", "undo"]},
+            "text": {"type": "string", "maxLength": 2000},
             "turn_id": _TURN_ID,
-            "action": {"type": "string", "enum": ["approve", "edit", "reject"]},
-            "final_text": {"type": "string", "maxLength": 2000},
-            "edit_categories": {
+            "version": {"type": "integer", "minimum": 1},
+            "categories": {
                 "type": "array",
                 "items": {
                     "type": "string",
                     "enum": ["fact", "tone", "length", "policy", "missing_info", "other"],
                 },
             },  # fmt: skip
-            "reason": {"type": "string", "maxLength": 500},
         },
-        "required": ["turn_id", "action"],
+        "required": ["action"],
         "additionalProperties": False,
     },
 }
@@ -513,16 +517,12 @@ def _guest_queue(args: dict[str, Any], **_: Any) -> str:
     return json.dumps({"turns": [{k: t.get(k) for k in keep if t.get(k)} for t in turns]})
 
 
-def _decide_guest(args: dict[str, Any], **_: Any) -> str:
-    body = {
-        "action": args.get("action"),
-        "decided_by": _operator(),
-        "final_text": args.get("final_text"),
-        "edit_categories": list(args.get("edit_categories") or []),
-        "reason": str(args.get("reason") or ""),
-    }
-    turn = urllib.parse.quote(str(args["turn_id"]))
-    return _call("POST", f"/internal/v1/guest/turns/{turn}/decision", body)
+def _answer_card(args: dict[str, Any], **_: Any) -> str:
+    body: dict[str, Any] = {"action": args.get("action"), "by": _operator()}
+    for key in ("text", "turn_id", "version", "categories"):
+        if args.get(key):
+            body[key] = args[key]
+    return _call("POST", "/internal/v1/guest/card", body)
 
 
 def _try_guest(args: dict[str, Any], **_: Any) -> str:
@@ -565,7 +565,7 @@ def register(ctx: Any) -> None:
         (LIST_WORK_SCHEMA, _list_work, "📋"),
         (UPDATE_WORK_SCHEMA, _update_work, "🔧"),
         (GUEST_QUEUE_SCHEMA, _guest_queue, "📥"),
-        (DECIDE_GUEST_SCHEMA, _decide_guest, "✅"),
+        (ANSWER_CARD_SCHEMA, _answer_card, "✅"),
         (TRY_GUEST_SCHEMA, _try_guest, "🧪"),
     ):
         ctx.register_tool(

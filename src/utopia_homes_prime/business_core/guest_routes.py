@@ -134,11 +134,28 @@ class DecisionBody(BaseModel):
     reason: str = ""
 
 
+_URGENCY = r"^(urgent|today|normal)$"
+
+
+class CardAnswer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: str = Field(pattern=r"^(send|revise|reject|undo)$")
+    by: str = Field(min_length=1, max_length=120)
+    text: str | None = Field(default=None, max_length=2000)
+    turn_id: str | None = Field(default=None, pattern=r"^gt-[a-z0-9]{12}$")
+    """Only when the host replied to a specific card; otherwise the card on screen."""
+    version: int | None = Field(default=None, ge=1)
+    categories: list[str] = Field(default_factory=list, max_length=10)
+    reason: str = Field(default="", max_length=1000)
+
+
 class ReplyBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     text: str = Field(min_length=1, max_length=4000)
     cited_ids: list[str] = Field(default_factory=list, max_length=20)
+    urgency: str | None = Field(default=None, pattern=_URGENCY)
 
 
 class EscalateBody(BaseModel):
@@ -147,6 +164,7 @@ class EscalateBody(BaseModel):
     category: str = Field(min_length=1, max_length=40)
     reason: str = Field(min_length=1, max_length=500)
     holding_reply: str | None = Field(default=None, max_length=1000)
+    urgency: str | None = Field(default=None, pattern=_URGENCY)
 
 
 class ProposeBody(BaseModel):
@@ -164,6 +182,8 @@ def _turn_summary(t: GuestTurn) -> dict[str, Any]:
         "reservation_id": t.reservation_id,
         "property_slug": t.property_slug,
         "state": t.state,
+        "priority": t.priority,
+        "version": len(t.attempts),
         "guest_message": t.guest_message,
         "draft": last.text if last else None,
         "gate": last.decision if last else None,
@@ -240,6 +260,31 @@ def register_guest_routes(
             return result
         return JSONResponse({"turn": result.model_dump(mode="json")})
 
+    @app.get("/internal/v1/guest/card")
+    async def card_on_screen() -> JSONResponse:
+        """The guest card the hosts see last in their chat, if it still needs an answer."""
+        current = await run_in_threadpool(desk.on_screen)
+        return JSONResponse({"card": _turn_summary(current) if current else None})
+
+    @app.post("/internal/v1/guest/card")
+    async def answer_card(body: CardAnswer) -> JSONResponse:
+        result = await _run(
+            lambda: desk.answer_card(
+                body.action, by=body.by, text=body.text, turn_id=body.turn_id,
+                version=body.version, categories=body.categories, reason=body.reason,
+            )
+        )  # fmt: skip
+        return result if isinstance(result, JSONResponse) else JSONResponse(result)
+
+    @app.post("/internal/v1/guest/turns/{turn_id}/reopen")
+    async def reopen(turn_id: str) -> JSONResponse:
+        result = await _run(lambda: desk.reopen(turn_id))
+        if isinstance(result, JSONResponse):
+            return result
+        if desk.cards is not None:
+            desk.cards.poke()
+        return JSONResponse({"turn": _turn_summary(result)})
+
     @app.post("/internal/v1/guest/turns/{turn_id}/decision")
     async def decide(turn_id: str, body: DecisionBody) -> JSONResponse:
         result = await _run(lambda: desk.decide(turn_id, body.model_dump()))
@@ -268,13 +313,15 @@ def register_guest_routes(
 
     @app.post("/guest/v1/turns/{turn_id}/reply")
     async def guest_reply(turn_id: str, body: ReplyBody) -> JSONResponse:
-        result = await _run(lambda: desk.reply(turn_id, body.text, body.cited_ids))
+        result = await _run(lambda: desk.reply(turn_id, body.text, body.cited_ids, body.urgency))
         return result if isinstance(result, JSONResponse) else JSONResponse(result)
 
     @app.post("/guest/v1/turns/{turn_id}/escalate")
     async def guest_escalate(turn_id: str, body: EscalateBody) -> JSONResponse:
         result = await _run(
-            lambda: desk.escalate(turn_id, body.category, body.reason, body.holding_reply)
+            lambda: desk.escalate(
+                turn_id, body.category, body.reason, body.holding_reply, body.urgency
+            )
         )
         return result if isinstance(result, JSONResponse) else JSONResponse(result)
 

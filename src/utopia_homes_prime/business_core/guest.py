@@ -23,11 +23,16 @@ import re
 import threading
 import uuid
 from collections.abc import Callable
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal, Protocol, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from utopia_homes_prime.business_core.host_cards import (
+    OPEN_STATES,
+    CardDispatcher,
+    priority_for,
+)
 from utopia_homes_prime.business_core.knowledge_items import KnowledgeItemStore
 from utopia_homes_prime.business_core.scrub import scrub
 from utopia_homes_prime.business_core.store import PropertyStore
@@ -78,6 +83,8 @@ class DraftRecord(BaseModel):
     decision: Literal["send", "review", "block"]
     findings: list[dict[str, str]]
     at: datetime
+    author: Literal["lucy", "host"] = "lucy"
+    """`host` for a version written from the host's changes; only its "send" finalizes it."""
 
 
 class Decision(BaseModel):
@@ -89,6 +96,8 @@ class Decision(BaseModel):
     edit_categories: list[str] = Field(default_factory=list, max_length=10)
     """What the edit fixed: fact, tone, length, policy, missing_info, other."""
     reason: str = Field(default="", max_length=1000)
+    edited: bool = False
+    """True when the sent wording was the host's version rather than Lucy's."""
     at: datetime
 
 
@@ -106,6 +115,13 @@ class GuestTurn(BaseModel):
     escalation: dict[str, str] | None = None
     proposed_work: list[str] = Field(default_factory=list)
     decision: Decision | None = None
+    undone: list[Decision] = Field(default_factory=list)
+    priority: Literal["urgent", "today", "normal"] = "normal"
+    card_sent_at: datetime | None = None
+    """When this turn's card last went to the hosts."""
+    card_seq: int = 0
+    """Send order across all cards: the highest is the card on screen (ties are impossible)."""
+    host_active_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -255,9 +271,10 @@ class GuestDesk:
         *,
         approved_hostnames: tuple[str, ...] = ("www.utopiahomes.com",),
         support_phone: str | None = None,
-        notify: Callable[[str], None] | None = None,
+        clock: Callable[[], datetime] = _now,
     ) -> None:
-        self._notify = notify
+        self._clock = clock
+        self.cards: CardDispatcher | None = None
         self.store = store
         self._properties = properties
         self._items = items
@@ -281,7 +298,7 @@ class GuestDesk:
         self, reservation_id: str, message: str, history: list[dict[str, str]] | None = None
     ) -> GuestTurn:
         r = self.store.reservation(reservation_id)
-        now = _now()
+        now = self._clock()
         clean = [{"role": m.get("role"), "text": scrub(str(m.get("text") or ""))}
                  for m in (history or [])]  # fmt: skip
         turn = _validate(GuestTurn, {
@@ -293,20 +310,122 @@ class GuestDesk:
         return turn
 
     def decide(self, turn_id: str, data: dict[str, Any]) -> GuestTurn:
+        """The API form of a host's answer for a named turn: approve (send the latest wording),
+        edit (a new version, sent back for a "send"), or reject."""
+        action = {"approve": "send", "edit": "revise", "reject": "reject"}.get(
+            str(data.get("action")), ""
+        )
+        if not action:
+            raise GuestError("action must be approve, edit, or reject")
+        self.answer_card(
+            action,
+            by=str(data.get("decided_by") or "host"),
+            text=data.get("final_text"),
+            turn_id=turn_id,
+            categories=list(data.get("edit_categories") or []),
+            reason=str(data.get("reason") or ""),
+        )
+        return self.store.turn(turn_id)
+
+    def on_screen(self) -> GuestTurn | None:
+        """The card the hosts see last in their chat, if it still needs an answer."""
+        shown = [t for t in self.store.turns(None, limit=300) if t.card_sent_at is not None]
+        if not shown:
+            return None
+        latest = max(shown, key=lambda t: t.card_seq)
+        return latest if latest.state in OPEN_STATES else None
+
+    def answer_card(
+        self,
+        action: str,
+        *,
+        by: str,
+        text: str | None = None,
+        turn_id: str | None = None,
+        version: int | None = None,
+        categories: list[str] | None = None,
+        reason: str = "",
+    ) -> dict[str, Any]:
+        """A host's answer to a card. Without `turn_id` it applies to the card on screen; the
+        code picks the card, never the model. Only `send` finalizes, and only the latest wording
+        the host was shown."""
+        now = self._clock()
+        if action == "undo":
+            return self._undo(by, now)
+        if turn_id:
+            turn = self.store.turn(turn_id)
+        else:
+            current = self.on_screen()
+            if current is None:
+                raise GuestError("no guest card is waiting for an answer")
+            turn = current
+        if turn.state not in OPEN_STATES:
+            raise GuestError(f"that guest message is already {turn.state}")
+        latest = turn.attempts[-1] if turn.attempts else None
+        n = len(turn.attempts)
+        if action == "send":
+            if version is not None and version != n:
+                raise GuestError(
+                    f"that was version {version}; the latest wording is v{n}. Say send to it."
+                )
+            if latest is None or latest.decision == "block":
+                raise GuestError("there is no sendable reply yet; give the wording you want")
+            if _PLACEHOLDER.search(latest.text):
+                raise GuestError("the reply still has [blanks]; give the missing detail")
+            decision = Decision(action="approve", decided_by=by, final_text=latest.text,
+                                edited=latest.author == "host", edit_categories=categories or [],
+                                reason=reason, at=now)  # fmt: skip
+            self._save(turn, state="approved", decision=decision, host_active_at=None)
+            return {"status": "approved", "turn_id": turn.id, "reply": latest.text,
+                    "sending": "not connected yet: approved replies are recorded"}  # fmt: skip
+        if action == "reject":
+            decision = Decision(action="reject", decided_by=by, reason=reason, at=now)
+            self._save(turn, state="rejected", decision=decision, host_active_at=None)
+            return {"status": "rejected", "turn_id": turn.id}
+        if action == "revise":
+            if not text or not text.strip():
+                raise GuestError("a change needs the new wording")
+            record = self._check(turn, text, []).model_copy(update={"author": "host"})
+            turn = self._save(turn, attempts=[*turn.attempts, record], host_active_at=now)
+            if self.cards is not None:
+                self.cards.send_card(turn)  # the new version goes back for a "send"
+            return {"status": "revised", "turn_id": turn.id, "version": len(turn.attempts),
+                    "gate": record.decision, "notes": [f["detail"] for f in record.findings],
+                    "next": "the updated card was sent; send finalizes it"}  # fmt: skip
+        raise GuestError("action must be send, revise, reject, or undo")
+
+    def _undo(self, by: str, now: datetime) -> dict[str, Any]:
+        decided = [t for t in self.store.turns(("approved", "rejected"), 50) if t.decision]
+        recent = [t for t in decided if t.decision and now - t.decision.at < timedelta(hours=1)]
+        if not recent:
+            raise GuestError("nothing was decided in the last hour to undo")
+        turn = max(recent, key=lambda t: t.decision.at if t.decision else now)
+        assert turn.decision is not None
+        turn = self._save(turn, state="queued" if turn.attempts else "escalated",
+                          undone=[*turn.undone, turn.decision], decision=None,
+                          host_active_at=now)  # fmt: skip
+        if self.cards is not None:
+            self.cards.send_card(turn)
+        return {"status": "reopened", "turn_id": turn.id}
+
+    def reopen(self, turn_id: str) -> GuestTurn:
+        """Operator repair: put a decided turn back in the queue (its decision is kept)."""
         turn = self.store.turn(turn_id)
-        if turn.state not in ("queued", "escalated"):
-            raise GuestError(f"turn is {turn.state}; only queued or escalated turns are decided")
-        decision = _validate(Decision, {**data, "at": _now()})
-        if decision.action == "edit" and not decision.final_text:
-            raise GuestError("an edit needs final_text")
-        if decision.action == "approve":
-            if not turn.attempts or turn.attempts[-1].decision == "block":
-                raise GuestError("there is no sendable draft to approve; edit or reject instead")
-            if _PLACEHOLDER.search(turn.attempts[-1].text):
-                raise GuestError("the draft still has [blanks] to fill in; send an edit instead")
-            decision.final_text = turn.attempts[-1].text
-        state: TurnState = "rejected" if decision.action == "reject" else "approved"
-        return self._save(turn, state=state, decision=decision)
+        if turn.decision is None:
+            raise GuestError("that turn has no decision to reopen")
+        turn = self._save(turn, state="queued" if turn.attempts else "escalated",
+                          undone=[*turn.undone, turn.decision], decision=None)  # fmt: skip
+        return turn
+
+    def home_name(self, slug: str) -> str:
+        return self._properties.get(slug).name
+
+    def mark_card_sent(self, turn_id: str, now: datetime) -> GuestTurn:
+        seq = max((t.card_seq for t in self.store.turns(None, limit=300)), default=0) + 1
+        turn = self.store.turn(turn_id)
+        updated = turn.model_copy(update={"card_sent_at": now, "card_seq": seq})
+        self.store.put_turn(updated)
+        return updated
 
     # Guest Lucy's side (everything scoped by the turn) ---------------------------------------
 
@@ -359,8 +478,15 @@ class GuestDesk:
                       for f in verdict.findings], at=_now(),
         )  # fmt: skip
 
-    def reply(self, turn_id: str, text: str, cited_ids: list[str]) -> dict[str, Any]:
+    def _priority(self, turn: GuestTurn, suggested: str | None) -> str:
+        r = self.store.reservation(turn.reservation_id)
+        return priority_for(suggested, turn.guest_message, r, self._clock())
+
+    def reply(
+        self, turn_id: str, text: str, cited_ids: list[str], urgency: str | None = None
+    ) -> dict[str, Any]:
         turn = self._open_turn(turn_id)
+        turn = turn.model_copy(update={"priority": self._priority(turn, urgency)})
         record = self._check(turn, text, cited_ids)
         attempts = [*turn.attempts, record]
         if record.decision != "block":
@@ -377,11 +503,17 @@ class GuestDesk:
                 "attempts_left": MAX_DRAFT_ATTEMPTS - len(attempts)}  # fmt: skip
 
     def escalate(
-        self, turn_id: str, category: str, reason: str, holding_reply: str | None = None
+        self,
+        turn_id: str,
+        category: str,
+        reason: str,
+        holding_reply: str | None = None,
+        urgency: str | None = None,
     ) -> dict[str, Any]:
-        """Hand the turn to a person, optionally with a short holding reply ("Let me check with
-        the team") that the gate checks and a person can approve in one tap."""
+        """Hand the turn to a person with a proposed reply: a holding line, or an answer with
+        [brackets] for what only the hosts know."""
         turn = self._open_turn(turn_id)
+        turn = turn.model_copy(update={"priority": self._priority(turn, urgency)})
         attempts = list(turn.attempts)
         result: dict[str, Any] = {"status": "escalated"}
         if holding_reply and holding_reply.strip():
@@ -411,48 +543,18 @@ class GuestDesk:
     def _save(self, turn: GuestTurn, **changes: Any) -> GuestTurn:
         updated = turn.model_copy(update={**changes, "updated_at": _now()})
         self.store.put_turn(updated)
-        if (
-            self._notify is not None
-            and updated.state in ("queued", "escalated")
-            and updated.state != turn.state
-        ):
-            self.notify_hosts(updated)
+        opened_or_closed = (updated.state in OPEN_STATES) != (turn.state in OPEN_STATES)
+        if self.cards is not None and opened_or_closed:
+            self.cards.poke()
         return updated
 
-    def notify_hosts(self, turn: GuestTurn, problem: str | None = None) -> None:
-        """Tell the hosts a guest message needs them. Never fails the guest flow."""
-        if self._notify is None:
+    def notify_hosts(self, turn: GuestTurn, problem: str) -> None:
+        """Send a turn's card now with a warning (e.g. guest Lucy could not be reached)."""
+        if self.cards is None:
             return
         try:
-            home = self._properties.get(turn.property_slug).name
-            self._notify(notification_text(turn, home, problem))
-        except Exception:  # a notification must never break a reply
+            self.cards.send_card(turn, problem=problem)
+        except Exception:  # a notification must never break the guest flow
             import logging
 
             logging.getLogger(__name__).warning("host notification failed", exc_info=True)
-
-
-def notification_text(turn: GuestTurn, home: str, problem: str | None = None) -> str:
-    """One Telegram message per guest message that needs a person: what the guest said, what
-    Lucy proposes, and how to answer. The turn id at the end lets Lucy match a reply to it."""
-    lines = [f"🏠 {home} · guest message", "", f"Guest: {turn.guest_message}", ""]
-    last = turn.attempts[-1] if turn.attempts else None
-    if problem:
-        lines += [f"⚠️ {problem}", ""]
-    if turn.escalation:
-        lines += [f"Lucy is handing this to you ({turn.escalation.get('category')}): "
-                  f"{turn.escalation.get('reason')}", ""]  # fmt: skip
-    if last is not None:
-        label = "Proposed reply" if last.decision != "block" else "Blocked draft (needs rewording)"
-        lines += [f"{label}:", last.text, ""]
-        notes = [f["detail"] for f in last.findings]
-        if notes:
-            lines += ["Check notes: " + "; ".join(notes), ""]
-    if turn.proposed_work:
-        lines += [f"Lucy also suggested a work item ({', '.join(turn.proposed_work)}).", ""]
-    if last is not None and last.decision != "block" and not _PLACEHOLDER.search(last.text):
-        lines.append('Reply to this message with "send", your changes, or "reject".')
-    else:
-        lines.append('Reply to this message with the reply you want, or "reject".')
-    lines.append(f"[{turn.id}]")
-    return "\n".join(lines)

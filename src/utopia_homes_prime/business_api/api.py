@@ -48,6 +48,7 @@ from utopia_homes_prime.business_core.guest_routes import (
     TelegramNotifier,
     register_guest_routes,
 )
+from utopia_homes_prime.business_core.host_cards import CardDispatcher
 from utopia_homes_prime.business_core.knowledge_items import (
     KnowledgeItemStore,
     PostgresKnowledgeItemStore,
@@ -541,8 +542,10 @@ def create_app(
             )
             or ("www.utopiahomes.com",),
             support_phone=business.support_phone,
-            notify=notifier,
         )
+        if notifier is not None:
+            guest_desk.cards = CardDispatcher(guest_desk, notifier)
+            guest_desk.cards.start()
 
         def wake_failed(turn_id: str) -> None:
             guest_desk.notify_hosts(

@@ -24,6 +24,16 @@ from typing import Any
 _ENV = ["UTOPIA_BUSINESS_API_URL", "UTOPIA_BUSINESS_GUEST_TOKEN"]
 _TURN = re.compile(r"(gt-[a-z0-9]{12})$")
 
+_URGENCY = {
+    "type": "string",
+    "enum": ["urgent", "today", "normal"],
+    "description": (
+        "urgent: something broken, unsafe, or blocking a guest who is there or arriving (a "
+        "leak, no heat or AC, locked out). today: affects a guest arriving or staying soon (an "
+        "early check-in). normal: everything else."
+    ),
+}
+
 CONTEXT_SCHEMA = {
     "name": "guest_context",
     "description": (
@@ -51,6 +61,7 @@ REPLY_SCHEMA = {
                 "maxItems": 20,
                 "description": "Knowledge ids (ki-...) and/or 'record'.",
             },
+            "urgency": _URGENCY,
         },
         "required": ["text", "cited_ids"],
         "additionalProperties": False,
@@ -92,7 +103,7 @@ ESCALATE_SCHEMA = {
                 ),
             },
         },
-        "required": ["category", "reason", "proposed_reply"],
+        "required": ["category", "reason", "proposed_reply", "urgency"],
         "additionalProperties": False,
     },
 }
@@ -157,13 +168,18 @@ def _context(args: dict[str, Any], **_: Any) -> str:
 
 def _reply(args: dict[str, Any], **_: Any) -> str:
     cited = [str(c) for c in args.get("cited_ids") or []][:20]
-    return _call("POST", "reply", {"text": str(args.get("text") or ""), "cited_ids": cited})
+    body: dict[str, Any] = {"text": str(args.get("text") or ""), "cited_ids": cited}
+    if args.get("urgency") in ("urgent", "today", "normal"):
+        body["urgency"] = args["urgency"]
+    return _call("POST", "reply", body)
 
 
 def _escalate(args: dict[str, Any], **_: Any) -> str:
     body = {"category": str(args.get("category") or "other"), "reason": str(args.get("reason"))}
     if args.get("proposed_reply"):
         body["holding_reply"] = str(args["proposed_reply"])[:1000]
+    if args.get("urgency") in ("urgent", "today", "normal"):
+        body["urgency"] = args["urgency"]
     return _call("POST", "escalate", body)
 
 
