@@ -27,6 +27,12 @@ from utopia_homes_prime.business_core.store import (
     PropertyNotFound,
     PropertyStore,
 )
+from utopia_homes_prime.business_core.work import (
+    OPEN_STATUSES,
+    InvalidWork,
+    WorkDesk,
+    WorkNotFound,
+)
 
 INTERNAL_PREFIX = "/internal/v1/"
 
@@ -88,6 +94,7 @@ def register_business_routes(
     store: PropertyStore,
     lucy_token: str,
     items: KnowledgeItemStore | None = None,
+    work: WorkDesk | None = None,
 ) -> None:
     def authorized(request: Request) -> bool:
         header = request.headers.get("authorization", "")
@@ -174,6 +181,8 @@ def register_business_routes(
 
     if items is not None:
         register_item_routes(app, items)
+    if work is not None:
+        register_work_routes(app, work)
 
     @app.get("/business/v1/public/properties")
     async def public_properties() -> JSONResponse:
@@ -224,3 +233,75 @@ def register_item_routes(app: FastAPI, items: KnowledgeItemStore) -> None:
         except InvalidItem as exc:
             return _error(422, "invalid_item", str(exc))
         return JSONResponse({"item": item.model_dump(mode="json")})
+
+
+class WorkCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    item: dict[str, Any]
+    requested_by: str = Field(min_length=1, max_length=120)
+
+
+class WorkUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    changes: dict[str, Any] = Field(default_factory=dict, max_length=20)
+    changed_by: str = Field(min_length=1, max_length=120)
+    note: str | None = Field(default=None, min_length=1, max_length=1000)
+
+
+def register_work_routes(app: FastAPI, desk: WorkDesk) -> None:
+    @app.get("/internal/v1/work")
+    async def search_work(
+        status: str | None = None,
+        property: str | None = None,
+        executor: str | None = None,
+        limit: int = 50,
+    ) -> JSONResponse:
+        """`status` is a comma list; `open` alone means everything not done or cancelled."""
+        statuses = (
+            OPEN_STATUSES if status == "open" else tuple(status.split(",")) if status else None
+        )
+        found = await run_in_threadpool(
+            lambda: desk.store.search(
+                statuses=statuses,
+                property_slug=property,
+                executor=executor,
+                limit=max(1, min(limit, 200)),
+            )
+        )
+        return JSONResponse({"work": [w.model_dump(mode="json") for w in found]})
+
+    @app.get("/internal/v1/work/{work_id}")
+    async def get_work(work_id: str) -> JSONResponse:
+        try:
+            item = await run_in_threadpool(desk.store.get, work_id)
+        except WorkNotFound:
+            return _error(404, "not_found", f"no work item {work_id!r}")
+        return JSONResponse({"work": item.model_dump(mode="json")})
+
+    @app.post("/internal/v1/work")
+    async def create_work(body: WorkCreate) -> JSONResponse:
+        try:
+            item = await run_in_threadpool(
+                lambda: desk.submit(body.item, requested_by=body.requested_by)
+            )
+        except InvalidWork as exc:
+            return _error(422, "invalid_work", str(exc))
+        return JSONResponse({"work": item.model_dump(mode="json")}, status_code=201)
+
+    @app.patch("/internal/v1/work/{work_id}")
+    async def update_work(work_id: str, body: WorkUpdate) -> JSONResponse:
+        if not body.changes and not body.note:
+            return _error(422, "invalid_work", "send changes, a note, or both")
+        try:
+            item = await run_in_threadpool(
+                lambda: desk.update(
+                    work_id, body.changes, changed_by=body.changed_by, note=body.note
+                )
+            )
+        except WorkNotFound:
+            return _error(404, "not_found", f"no work item {work_id!r}")
+        except InvalidWork as exc:
+            return _error(422, "invalid_work", str(exc))
+        return JSONResponse({"work": item.model_dump(mode="json")})

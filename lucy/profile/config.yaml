@@ -87,6 +87,13 @@ display:
 telegram:
   gateway_restart_notification: false
 
+# A fresh session after 4 quiet hours keeps each conversation short (compression is off);
+# continuity lives in the business records, knowledge, work items, and Lucy's small memory.
+session_reset:
+  mode: idle
+  idle_minutes: 240
+  notify: false
+
 toolsets: []
 
 platform_toolsets:

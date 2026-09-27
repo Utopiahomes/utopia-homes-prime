@@ -1,4 +1,5 @@
-"""Utopia Lucy's business tools: the property records in Utopia's business core (Homes Prime).
+"""Utopia Lucy's business tools: property records, knowledge, and work items in Utopia's
+business core (Homes Prime).
 
 The records are the single source of truth. The public guest assistant answers from them, so
 a correction saved here reaches guests within about a minute. Every change is attributed to the
@@ -37,12 +38,20 @@ LIST_SCHEMA = {
 GET_SCHEMA = {
     "name": "utopia_get_property",
     "description": (
-        "Read one property's full record: descriptions, capacity, rooms, amenities, highlights, "
-        "pet policy, parking, accessibility, and status. This is what guests are told."
+        "Read a property's record: what guests are told. Pass `fields` for just what you need "
+        "(e.g. parking); omit it only when you need the whole record."
     ),
     "parameters": {
         "type": "object",
-        "properties": {"slug": _SLUG},
+        "properties": {
+            "slug": _SLUG,
+            "fields": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "e.g. max_guests, beds, beds_by_room, parking, pet_policy, "
+                "check_in_time, check_out_time, min_age, amenities, full_description, status.",
+            },
+        },
         "required": ["slug"],
         "additionalProperties": False,
     },
@@ -181,6 +190,81 @@ CONFIRM_SCHEMA = {
 }
 
 
+_WORK_ID = {"type": "string", "pattern": "^wi-[a-z0-9]{12}$"}
+
+OPEN_WORK_SCHEMA = {
+    "name": "utopia_open_work",
+    "description": (
+        "Open a work item when Ray asks for something to be DONE (call a vendor, fix something, "
+        "follow up, reconcile, send, buy, schedule), instead of doing it or promising it. A "
+        "person (Ray or Meghan) does the work for now. Write the purpose so whoever does it "
+        "needs no other context."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "type": {
+                "type": "string",
+                "enum": [
+                    "maintenance",
+                    "vendor_followup",
+                    "guest_request",
+                    "cleaning",
+                    "finance",
+                    "owner",
+                    "marketing",
+                    "other",
+                ],
+            },  # fmt: skip
+            "title": {"type": "string", "minLength": 1, "maxLength": 160},
+            "purpose": {"type": "string", "minLength": 1, "maxLength": 2000},
+            "slug": {**_SLUG, "description": "The property, if the work is about one."},
+            "due_at": {"type": "string", "description": "ISO date or datetime, if Ray gave one."},
+        },
+        "required": ["type", "title", "purpose"],
+        "additionalProperties": False,
+    },
+}
+
+LIST_WORK_SCHEMA = {
+    "name": "utopia_list_work",
+    "description": "List work items: open ones by default (not done or cancelled).",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "status": {
+                "type": "string",
+                "enum": ["open", "proposed", "in_progress", "waiting", "done", "cancelled"],
+            },
+            "slug": _SLUG,
+        },
+        "additionalProperties": False,
+    },
+}
+
+UPDATE_WORK_SCHEMA = {
+    "name": "utopia_update_work",
+    "description": (
+        "Record progress on a work item as Ray reports it: add a note, change status "
+        "(open, in_progress, waiting, done, cancelled), or record the result when done."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "work_id": _WORK_ID,
+            "status": {
+                "type": "string",
+                "enum": ["open", "in_progress", "waiting", "done", "cancelled"],
+            },
+            "note": {"type": "string", "minLength": 1, "maxLength": 1000},
+            "result": {"type": "string", "maxLength": 2000},
+        },  # fmt: skip
+        "required": ["work_id"],
+        "additionalProperties": False,
+    },
+}
+
+
 def _operator() -> str:
     return f"{os.environ.get('UTOPIA_LUCY_OPERATOR_NAME', 'operator')} via Utopia Lucy"
 
@@ -213,7 +297,33 @@ def _list(args: dict[str, Any], **_: Any) -> str:
 
 
 def _get(args: dict[str, Any], **_: Any) -> str:
-    return _call("GET", f"/internal/v1/properties/{urllib.parse.quote(str(args['slug']))}")
+    raw = _call("GET", f"/internal/v1/properties/{urllib.parse.quote(str(args['slug']))}")
+    fields = [str(f) for f in args.get("fields") or []]
+    if not fields:
+        return raw
+    try:
+        data = json.loads(raw)
+        record = data["property"]
+    except (ValueError, KeyError, TypeError):
+        return raw
+    return json.dumps(
+        {
+            "property": {"slug": record.get("slug"), **{f: record.get(f) for f in fields}},
+            "unconfirmed_fields": [f for f in data.get("unconfirmed_fields", []) if f in fields],
+        }
+    )
+
+
+def _compact_items(raw: str) -> str:
+    """Only what Lucy needs to talk about an item; evidence and timestamps stay in the store."""
+    try:
+        items = json.loads(raw)["items"]
+    except (ValueError, KeyError, TypeError):
+        return raw
+    keep = ("id", "property_slug", "audience", "kind", "status", "title", "text", "confidence",
+            "relation", "source_note")  # fmt: skip
+    return json.dumps({"items": [{k: i.get(k) for k in keep if i.get(k) is not None}
+                                 for i in items]})  # fmt: skip
 
 
 def _update(args: dict[str, Any], **_: Any) -> str:
@@ -243,7 +353,7 @@ def _search_knowledge(args: dict[str, Any], **_: Any) -> str:
         "limit": 40,
     }
     query = urllib.parse.urlencode({k: v for k, v in params.items() if v})
-    return _call("GET", f"/internal/v1/knowledge?{query}")
+    return _compact_items(_call("GET", f"/internal/v1/knowledge?{query}"))
 
 
 def _add_knowledge(args: dict[str, Any], **_: Any) -> str:
@@ -280,6 +390,61 @@ def _confirm(args: dict[str, Any], **_: Any) -> str:
     )
 
 
+def _compact_work(raw: str) -> str:
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return raw
+    keep = ("id", "type", "title", "property_slug", "status", "assigned_executor", "due_at",
+            "result", "updated_at")  # fmt: skip
+
+    def one(w: dict[str, Any]) -> dict[str, Any]:
+        brief = {k: w.get(k) for k in keep if w.get(k)}
+        if w.get("notes"):
+            brief["last_note"] = w["notes"][-1]["text"]
+        return brief
+
+    if isinstance(data.get("work"), list):
+        return json.dumps({"work": [one(w) for w in data["work"]]})
+    if isinstance(data.get("work"), dict):
+        return json.dumps({"work": one(data["work"])})
+    return raw
+
+
+def _open_work(args: dict[str, Any], **_: Any) -> str:
+    item = {
+        "type": args.get("type"),
+        "title": args.get("title"),
+        "purpose": args.get("purpose"),
+        "property_slug": args.get("slug"),
+        "due_at": args.get("due_at"),
+        "status": "open",
+    }
+    return _compact_work(
+        _call(
+            "POST",
+            "/internal/v1/work",
+            {"item": {k: v for k, v in item.items() if v}, "requested_by": _operator()},
+        )
+    )
+
+
+def _list_work(args: dict[str, Any], **_: Any) -> str:
+    params = {"status": args.get("status") or "open", "property": args.get("slug"), "limit": 30}
+    query = urllib.parse.urlencode({k: v for k, v in params.items() if v})
+    return _compact_work(_call("GET", f"/internal/v1/work?{query}"))
+
+
+def _update_work(args: dict[str, Any], **_: Any) -> str:
+    changes = {k: args[k] for k in ("status", "result") if args.get(k)}
+    body: dict[str, Any] = {"changes": changes, "changed_by": _operator()}
+    if args.get("note"):
+        body["note"] = str(args["note"])[:1000]
+    return _compact_work(
+        _call("PATCH", f"/internal/v1/work/{urllib.parse.quote(str(args['work_id']))}", body)
+    )
+
+
 def register(ctx: Any) -> None:
     for schema, handler, emoji in (
         (LIST_SCHEMA, _list, "🏠"),
@@ -290,6 +455,9 @@ def register(ctx: Any) -> None:
         (ADD_KNOWLEDGE_SCHEMA, _add_knowledge, "➕"),
         (UPDATE_KNOWLEDGE_SCHEMA, _update_knowledge, "🗂️"),
         (CONFIRM_SCHEMA, _confirm, "✅"),
+        (OPEN_WORK_SCHEMA, _open_work, "🧰"),
+        (LIST_WORK_SCHEMA, _list_work, "📋"),
+        (UPDATE_WORK_SCHEMA, _update_work, "🔧"),
     ):
         ctx.register_tool(
             name=schema["name"],

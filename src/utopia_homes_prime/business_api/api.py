@@ -44,6 +44,12 @@ from utopia_homes_prime.business_core.knowledge_items import (
 from utopia_homes_prime.business_core.records import PropertyRecord
 from utopia_homes_prime.business_core.routes import register_business_routes
 from utopia_homes_prime.business_core.store import PostgresPropertyStore, PropertyStore
+from utopia_homes_prime.business_core.work import (
+    MemoryWorkStore,
+    PostgresWorkStore,
+    WorkDesk,
+    WorkStore,
+)
 from utopia_homes_prime.config import (
     MEETING_DRAFT_BUDGET_MS,
     MEETING_RESPOND_BUDGET_MS,
@@ -368,6 +374,7 @@ def create_app(
     execution_transport: httpx.AsyncBaseTransport | None = None,
     business_store: PropertyStore | None = None,
     knowledge_store: KnowledgeItemStore | None = None,
+    work_store: WorkStore | None = None,
 ) -> FastAPI:
     """`execution_transport` exists only so tests can route the selected inference backend
     client to an in-process fake; runtime wiring always uses the default network transport.
@@ -375,9 +382,16 @@ def create_app(
     allowlist = KeyAllowlist(config.jwt_keys)
     store: PropertyStore | None = None
     items: KnowledgeItemStore | None = None
+    work: WorkStore | None = None
     if config.business is not None:
         store = business_store or PostgresPropertyStore(config.business.database_url)
         items = knowledge_store or PostgresKnowledgeItemStore(config.business.database_url)
+        # Tests that inject an in-memory property store get in-memory work too.
+        work = work_store or (
+            MemoryWorkStore()
+            if business_store is not None
+            else PostgresWorkStore(config.business.database_url)
+        )
         if config.business.seed_path:
             seed = json.loads(Path(config.business.seed_path).read_text(encoding="utf-8"))
             store.seed_if_empty([PropertyRecord.model_validate(p) for p in seed["properties"]])
@@ -488,8 +502,13 @@ def create_app(
     if config.business is not None:
         assert store is not None
         app.state.business_store = store
+        assert work is not None
         register_business_routes(
-            app, store=store, lucy_token=config.business.lucy_token, items=items
+            app,
+            store=store,
+            lucy_token=config.business.lucy_token,
+            items=items,
+            work=WorkDesk(work),
         )
 
     @app.get("/healthz")
