@@ -24,6 +24,7 @@ from typing import Any
 SERVICES = {
     "homes-prime": "srv-daqnmhrncjis739cuepg",
     "lucy": "srv-darvbonavr4c738c62b0",
+    "lucy-guest": "srv-das9j8e0tbcc73eeob10",
 }
 # Variables that hold secrets are set in the Render dashboard, never from here.
 _SECRET = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|DATABASE_URL|PEM)", re.IGNORECASE)
