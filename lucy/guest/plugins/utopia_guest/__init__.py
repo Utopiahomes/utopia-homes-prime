@@ -80,14 +80,19 @@ ESCALATE_SCHEMA = {
                 ],
             },  # fmt: skip
             "reason": {"type": "string", "minLength": 1, "maxLength": 500},
-            "holding_reply": {
+            "proposed_reply": {
                 "type": "string",
-                "maxLength": 500,
-                "description": 'A short reply for the guest meanwhile, e.g. "Hi! Let me check '
-                'with the team and get back to you shortly." Never promise the outcome.',
+                "minLength": 1,
+                "maxLength": 1000,
+                "description": (
+                    "The reply you propose the hosts send. Either a full answer with [brackets] "
+                    'where only the hosts know the detail ("Hi! Yes, you can check in at '
+                    '[time]."), or a one-line holding reply ("Hi! Let me check with the team '
+                    'and get back to you shortly.").'
+                ),
             },
         },
-        "required": ["category", "reason"],
+        "required": ["category", "reason", "proposed_reply"],
         "additionalProperties": False,
     },
 }
@@ -157,8 +162,8 @@ def _reply(args: dict[str, Any], **_: Any) -> str:
 
 def _escalate(args: dict[str, Any], **_: Any) -> str:
     body = {"category": str(args.get("category") or "other"), "reason": str(args.get("reason"))}
-    if args.get("holding_reply"):
-        body["holding_reply"] = str(args["holding_reply"])[:1000]
+    if args.get("proposed_reply"):
+        body["holding_reply"] = str(args["proposed_reply"])[:1000]
     return _call("POST", "escalate", body)
 
 

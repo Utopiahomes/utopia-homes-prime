@@ -400,6 +400,9 @@ class BusinessCoreConfig:
     """Guest Lucy's webhook, e.g. http://utopia-lucy-guest:8644/webhooks/guest_turn."""
     guest_webhook_secret: str | None = None
     support_phone: str | None = None
+    notify_bot_token: str | None = None
+    """Utopia Lucy's Telegram bot token, used only to send host notifications."""
+    notify_chat_id: str | None = None
 
     @classmethod
     def from_environment(cls, env: Mapping[str, str]) -> BusinessCoreConfig | None:
@@ -428,6 +431,8 @@ class BusinessCoreConfig:
             guest_worker_url=worker,
             guest_webhook_secret=secret,
             support_phone=(env.get("UTOPIA_SUPPORT_PHONE") or "").strip() or None,
+            notify_bot_token=(env.get("UTOPIA_NOTIFY_TELEGRAM_BOT_TOKEN") or "").strip() or None,
+            notify_chat_id=(env.get("UTOPIA_NOTIFY_TELEGRAM_CHAT_ID") or "").strip() or None,
         )
 
 

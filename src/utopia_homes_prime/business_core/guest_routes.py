@@ -15,6 +15,7 @@ import logging
 import threading
 import time
 import urllib.request
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -30,14 +31,42 @@ GUEST_PREFIX = "/guest/v1/"
 _log = logging.getLogger(__name__)
 
 
+class TelegramNotifier:
+    """Sends a plain-text message to the hosts' Telegram chat through Utopia Lucy's bot, so the
+    hosts can answer it there (Lucy sees the message they reply to)."""
+
+    def __init__(self, bot_token: str, chat_id: str) -> None:
+        self._url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        self._chat_id = chat_id
+
+    def __call__(self, text: str) -> None:
+        threading.Thread(target=self._send, args=(text,), daemon=True).start()
+
+    def _send(self, text: str) -> None:
+        body = json.dumps(
+            {"chat_id": self._chat_id, "text": text[:4000], "disable_web_page_preview": True}
+        ).encode()
+        request = urllib.request.Request(
+            self._url, data=body, method="POST", headers={"Content-Type": "application/json"}
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                response.read()
+        except Exception:
+            _log.warning("could not notify the hosts on Telegram")  # never log the bot URL
+
+
 class GuestWaker:
     """Wakes guest Lucy for a new turn: a signed POST to her Hermes webhook (V2 signature: HMAC of
     "<timestamp>.<body>"). The turn id travels as X-Request-ID, which becomes her session's id,
     so her tools know the turn without the model ever saying it."""
 
-    def __init__(self, url: str, secret: str) -> None:
+    def __init__(
+        self, url: str, secret: str, on_failure: Callable[[str], None] | None = None
+    ) -> None:
         self._url = url
         self._secret = secret.encode()
+        self._on_failure = on_failure
 
     def wake(self, turn: GuestTurn) -> None:
         threading.Thread(target=self._post, args=(turn.id,), daemon=True).start()
@@ -62,6 +91,8 @@ class GuestWaker:
                 response.read()
         except Exception:  # the turn waits in awaiting_draft; /wake retries it
             _log.warning("could not wake guest Lucy for %s", turn_id, exc_info=True)
+            if self._on_failure is not None:
+                self._on_failure(turn_id)
 
 
 def _error(status: int, code: str, message: str) -> JSONResponse:

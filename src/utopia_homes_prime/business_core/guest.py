@@ -19,8 +19,10 @@ Guest names, phone numbers, emails, and codes are scrubbed before anything is st
 from __future__ import annotations
 
 import json
+import re
 import threading
 import uuid
+from collections.abc import Callable
 from datetime import UTC, date, datetime
 from typing import Any, Literal, Protocol, TypeVar
 
@@ -33,6 +35,7 @@ from utopia_homes_prime.business_core.work import WorkDesk, WorkItem
 from utopia_homes_prime.guest_reply.gate import Channel, Draft, check_reply, gather_context
 
 TurnState = Literal["awaiting_draft", "queued", "escalated", "approved", "rejected"]
+_PLACEHOLDER = re.compile(r"\[[^\]]{1,80}\]")
 MAX_DRAFT_ATTEMPTS = 3
 GUEST_AUDIENCES = ("public", "booked_guest")
 
@@ -252,7 +255,9 @@ class GuestDesk:
         *,
         approved_hostnames: tuple[str, ...] = ("www.utopiahomes.com",),
         support_phone: str | None = None,
+        notify: Callable[[str], None] | None = None,
     ) -> None:
+        self._notify = notify
         self.store = store
         self._properties = properties
         self._items = items
@@ -297,6 +302,8 @@ class GuestDesk:
         if decision.action == "approve":
             if not turn.attempts or turn.attempts[-1].decision == "block":
                 raise GuestError("there is no sendable draft to approve; edit or reject instead")
+            if _PLACEHOLDER.search(turn.attempts[-1].text):
+                raise GuestError("the draft still has [blanks] to fill in; send an edit instead")
             decision.final_text = turn.attempts[-1].text
         state: TurnState = "rejected" if decision.action == "reject" else "approved"
         return self._save(turn, state=state, decision=decision)
@@ -404,4 +411,48 @@ class GuestDesk:
     def _save(self, turn: GuestTurn, **changes: Any) -> GuestTurn:
         updated = turn.model_copy(update={**changes, "updated_at": _now()})
         self.store.put_turn(updated)
+        if (
+            self._notify is not None
+            and updated.state in ("queued", "escalated")
+            and updated.state != turn.state
+        ):
+            self.notify_hosts(updated)
         return updated
+
+    def notify_hosts(self, turn: GuestTurn, problem: str | None = None) -> None:
+        """Tell the hosts a guest message needs them. Never fails the guest flow."""
+        if self._notify is None:
+            return
+        try:
+            home = self._properties.get(turn.property_slug).name
+            self._notify(notification_text(turn, home, problem))
+        except Exception:  # a notification must never break a reply
+            import logging
+
+            logging.getLogger(__name__).warning("host notification failed", exc_info=True)
+
+
+def notification_text(turn: GuestTurn, home: str, problem: str | None = None) -> str:
+    """One Telegram message per guest message that needs a person: what the guest said, what
+    Lucy proposes, and how to answer. The turn id at the end lets Lucy match a reply to it."""
+    lines = [f"🏠 {home} · guest message", "", f"Guest: {turn.guest_message}", ""]
+    last = turn.attempts[-1] if turn.attempts else None
+    if problem:
+        lines += [f"⚠️ {problem}", ""]
+    if turn.escalation:
+        lines += [f"Lucy is handing this to you ({turn.escalation.get('category')}): "
+                  f"{turn.escalation.get('reason')}", ""]  # fmt: skip
+    if last is not None:
+        label = "Proposed reply" if last.decision != "block" else "Blocked draft (needs rewording)"
+        lines += [f"{label}:", last.text, ""]
+        notes = [f["detail"] for f in last.findings]
+        if notes:
+            lines += ["Check notes: " + "; ".join(notes), ""]
+    if turn.proposed_work:
+        lines += [f"Lucy also suggested a work item ({', '.join(turn.proposed_work)}).", ""]
+    if last is not None and last.decision != "block" and not _PLACEHOLDER.search(last.text):
+        lines.append('Reply to this message with "send", your changes, or "reject".')
+    else:
+        lines.append('Reply to this message with the reply you want, or "reject".')
+    lines.append(f"[{turn.id}]")
+    return "\n".join(lines)

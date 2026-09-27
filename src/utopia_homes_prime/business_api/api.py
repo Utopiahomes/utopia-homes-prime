@@ -43,7 +43,11 @@ from utopia_homes_prime.business_core.guest import (
     MemoryGuestStore,
     PostgresGuestStore,
 )
-from utopia_homes_prime.business_core.guest_routes import GuestWaker, register_guest_routes
+from utopia_homes_prime.business_core.guest_routes import (
+    GuestWaker,
+    TelegramNotifier,
+    register_guest_routes,
+)
 from utopia_homes_prime.business_core.knowledge_items import (
     KnowledgeItemStore,
     PostgresKnowledgeItemStore,
@@ -522,22 +526,35 @@ def create_app(
             app, store=store, lucy_token=config.business.lucy_token, items=items, work=desk
         )
         business = config.business
+        notifier = (
+            TelegramNotifier(business.notify_bot_token, business.notify_chat_id)
+            if business.notify_bot_token and business.notify_chat_id
+            else None
+        )
+        guest_desk = GuestDesk(
+            guests,
+            store,
+            items,
+            desk,
+            approved_hostnames=tuple(
+                config.homes_prime.approved_hostnames if config.homes_prime else ()
+            )
+            or ("www.utopiahomes.com",),
+            support_phone=business.support_phone,
+            notify=notifier,
+        )
+
+        def wake_failed(turn_id: str) -> None:
+            guest_desk.notify_hosts(
+                guest_desk.store.turn(turn_id), "Guest Lucy could not be reached to draft a reply."
+            )
+
         register_guest_routes(
             app,
-            GuestDesk(
-                guests,
-                store,
-                items,
-                desk,
-                approved_hostnames=tuple(
-                    config.homes_prime.approved_hostnames if config.homes_prime else ()
-                )
-                or ("www.utopiahomes.com",),
-                support_phone=business.support_phone,
-            ),
+            guest_desk,
             guest_token=business.guest_token,
             waker=(
-                GuestWaker(business.guest_worker_url, business.guest_webhook_secret)
+                GuestWaker(business.guest_worker_url, business.guest_webhook_secret, wake_failed)
                 if business.guest_worker_url and business.guest_webhook_secret
                 else None
             ),
