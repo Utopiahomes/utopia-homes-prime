@@ -154,8 +154,15 @@ class CardDispatcher:
         self._lock = threading.Lock()
         self._wake = threading.Event()
 
-    def poke(self) -> None:
-        self._wake.set()
+    def poke(self, delay: float = 0.0) -> None:
+        """Run a tick now, or after `delay` seconds (after an answer, so Lucy's confirmation
+        reaches the chat before the next card does)."""
+        if delay > 0:
+            timer = threading.Timer(delay, self._wake.set)
+            timer.daemon = True
+            timer.start()
+        else:
+            self._wake.set()
 
     def start(self) -> None:
         def loop() -> None:

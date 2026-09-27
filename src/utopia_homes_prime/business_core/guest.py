@@ -42,6 +42,7 @@ from utopia_homes_prime.guest_reply.gate import Channel, Draft, check_reply, gat
 TurnState = Literal["awaiting_draft", "queued", "escalated", "approved", "rejected"]
 _PLACEHOLDER = re.compile(r"\[[^\]]{1,80}\]")
 MAX_DRAFT_ATTEMPTS = 3
+ANSWER_PAUSE_SECONDS = 12.0
 GUEST_AUDIENCES = ("public", "booked_guest")
 
 
@@ -385,7 +386,10 @@ class GuestDesk:
         if action == "revise":
             if not text or not text.strip():
                 raise GuestError("a change needs the new wording")
-            record = self._check(turn, text, []).model_copy(update={"author": "host"})
+            record = self._check(turn, text, [])
+            # The host is the source for their own wording: only never-send findings matter.
+            kept = [f for f in record.findings if f["severity"] == "block"]
+            record = record.model_copy(update={"author": "host", "findings": kept})
             turn = self._save(turn, attempts=[*turn.attempts, record], host_active_at=now)
             if self.cards is not None:
                 self.cards.send_card(turn)  # the new version goes back for a "send"
@@ -545,7 +549,8 @@ class GuestDesk:
         self.store.put_turn(updated)
         opened_or_closed = (updated.state in OPEN_STATES) != (turn.state in OPEN_STATES)
         if self.cards is not None and opened_or_closed:
-            self.cards.poke()
+            # A closed card: wait for Lucy's confirmation to land before the next card.
+            self.cards.poke(delay=0.0 if updated.state in OPEN_STATES else ANSWER_PAUSE_SECONDS)
         return updated
 
     def notify_hosts(self, turn: GuestTurn, problem: str) -> None:
