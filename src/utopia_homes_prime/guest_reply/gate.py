@@ -106,7 +106,8 @@ _ACTION_CLAIM = re.compile(
     r"\b(?:someone|a tech(?:nician)?|the (?:pool|hvac|cleaning|repair) (?:company|team|guy))"
     r" (?:will|is going to|is on (?:the|their) way)\b|"
     r"\b(?:i|we)(?:'ll| will) (?:send|have) (?:someone|a|the)\b|"
-    r"\bguarantee\w*\b|"
+    # "we guarantee" is a promise; "isn't guaranteed" / "no guarantee" / "can't guarantee" is not.
+    r"(?<!not )(?<!n't )(?<!n’t )(?<!no )(?<!never )\bguarantee\w*\b|"
     r"\b(?:early check-?in|late check-?out|early arrival|late departure)"
     r" (?:is|are|has been|will be) (?:fine|ok(?:ay)?|approved|confirmed|no problem)\b"
 )

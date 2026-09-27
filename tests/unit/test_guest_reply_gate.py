@@ -150,3 +150,14 @@ def test_another_homes_name_needs_review_and_uncited_claims_too():
 def test_the_home_record_can_be_cited():
     v = verdict("Check-in is at 4 PM and checkout at 10 AM.", ["record"])
     assert v.decision == "send", v.findings
+
+
+def test_saying_something_is_not_guaranteed_is_not_a_promise():
+    for text in (
+        "Early check-in isn't guaranteed.",
+        "Early check-in isn’t guaranteed.",
+        "We can't guarantee an early check-in.",
+        "There is no guarantee of that.",
+    ):
+        assert "action_claim" not in verdict(text, ["pool"]).codes, text
+    assert "action_claim" in verdict("We guarantee the hot tub will be ready.", ["pool"]).codes
