@@ -24,6 +24,7 @@ import sys
 import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +45,12 @@ outcome:
   information the assistant could not have (money, an exception, a repair, a personal call).
 - needless_hand_over: the draft handed over, but the host's reply was routine information.
 - not_comparable: the host's reply does not answer the guest (logistics between hosts, etc.).
+- host_had_outside_info: the host's reply relies on something outside the conversation (an
+  update from cleaners or a vendor, something the host already did or ordered, a decision made
+  elsewhere) and the draft reasonably says it will check or hands over. This is not "wrong".
+The assistant's approved knowledge can be newer than the host's reply (for example a corrected
+bed count or pet limit), so a fact that differs from the host is "wrong" only if it looks
+invented or contradicts the conversation itself.
 Also rate the draft's tone against the host's warm, brief style: good, too_long, too_stiff."""
 
 JUDGE_SCHEMA = {
@@ -51,7 +58,7 @@ JUDGE_SCHEMA = {
     "properties": {
         "outcome": {"type": "string", "enum": ["same", "draft_better", "missing_info", "wrong",
                                                "right_hand_over", "needless_hand_over",
-                                               "not_comparable"]},
+                                               "host_had_outside_info", "not_comparable"]},
         "tone": {"type": "string", "enum": ["good", "too_long", "too_stiff"]},
         "note": {"type": "string"},
     },
@@ -92,8 +99,12 @@ def cases(threads: Path, home: str, since: str) -> list[dict[str, Any]]:
 
 
 def run_case(api: Api, case: dict[str, Any], home: str) -> dict[str, Any]:
+    # Real stay dates are not in the import; a stay starting a week after the message keeps the
+    # dates plausible without inventing a season the guest never mentioned.
+    start = date.fromisoformat(case["at"][:10]) + timedelta(days=7)
     reservation = api("POST", "/internal/v1/reservations", {
-        "property_slug": home, "check_in": "2026-10-09", "check_out": "2026-10-12",
+        "property_slug": home, "check_in": start.isoformat(),
+        "check_out": (start + timedelta(days=3)).isoformat(),
         "guests": 10, "label": f"TEST replay {case['thread']}"})["reservation"]  # fmt: skip
     turn = api("POST", "/internal/v1/guest/turns", {
         "reservation_id": reservation["id"], "message": case["guest"],
