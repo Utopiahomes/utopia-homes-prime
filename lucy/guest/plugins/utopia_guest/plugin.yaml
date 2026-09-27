@@ -1,0 +1,10 @@
+name: utopia_guest
+version: 0.1.0
+description: Guest Lucy's tools. Read one guest turn and answer it through Homes Prime's gate.
+author: Utopia Homes
+kind: standalone
+provides_tools:
+  - guest_context
+  - send_guest_reply
+  - escalate_to_host
+  - propose_work

@@ -46,6 +46,8 @@ def test_guest_names_go_but_host_names_stay():
     assert scrub("hi how are you? Hey there!") == "hi how are you? Hey there!"
     assert scrub("See you soon!\nThanks,\nBrendan").endswith("[GUEST]")
     assert "Jordan" not in scrub("Is it ready? Thank you!\n\nJordan ! ")
+    assert scrub("Hi, it's Jennifer! My name is Pat.") == "Hi, it's [GUEST]! My name is [GUEST]."
+    assert scrub("It's Monday and this is Meghan") == "It's Monday and this is Meghan"
     assert scrub("See you then!\nMeghan").endswith("Meghan")
 
 

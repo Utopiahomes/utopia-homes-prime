@@ -1,0 +1,123 @@
+_config_version: 38
+
+# Guest Lucy: drafts replies to booked guests. Hermes runs unmodified. She is woken by Homes Prime
+# through a signed webhook, one guest message (turn) per run, and has exactly four tools
+# (plugins/utopia_guest). No memory, no session search, no other toolsets: continuity comes from
+# the turn's context in Homes Prime, and her only exit is a reply checked by Prime's gate.
+
+model:
+  provider: custom:utopia-openrouter
+  default: openai/gpt-6-luna
+
+providers:
+  utopia-openrouter:
+    name: Utopia OpenRouter
+    api: https://openrouter.ai/api/v1
+    key_env: OPENROUTER_API_KEY
+    transport: chat_completions
+    default_model: openai/gpt-6-luna
+    discover_models: false
+    models:
+      openai/gpt-6-luna: {}
+    extra_body:
+      provider:
+        zdr: true
+        data_collection: deny
+        require_parameters: true
+        max_price:
+          prompt: 0.20
+          completion: 1.00
+
+fallback_providers: []
+
+model_overrides:
+  custom:utopia-openrouter:
+    openai/gpt-6-luna:
+      context_window: 131072
+      max_output_tokens: 1024
+      supports_tools: true
+      supports_reasoning: true
+
+agent:
+  max_turns: 8
+  run_budget_seconds: 120
+  reasoning_effort: low
+  gateway_notify_interval: 0
+
+openrouter:
+  response_cache: false
+
+provider_routing:
+  require_parameters: true
+  data_collection: deny
+
+plugins:
+  enabled:
+    - utopia_guest
+
+auxiliary:
+  compression:
+    enabled: false
+  title_generation:
+    enabled: false
+  background_review:
+    enabled: false
+
+memory:
+  memory_enabled: false
+  user_profile_enabled: false
+
+curator:
+  enabled: false
+
+streaming:
+  enabled: false
+
+display:
+  tool_progress: "off"
+  interim_assistant_messages: false
+  show_commentary: false
+  show_reasoning: false
+  runtime_footer:
+    enabled: false
+
+# One route. The secret comes from WEBHOOK_SECRET; WEBHOOK_ENABLED and WEBHOOK_PORT are set in the
+# worker's environment. The run's final text goes only to the log: guests are reached solely
+# through send_guest_reply.
+platforms:
+  webhook:
+    extra:
+      rate_limit: 60
+      max_body_bytes: 4096
+      routes:
+        guest_turn:
+          deliver: log
+          prompt: >-
+            A booked guest sent a new message. Read it with guest_context, then answer it with
+            send_guest_reply or hand it to the hosts with escalate_to_host.
+
+toolsets: []
+
+platform_toolsets:
+  webhook:
+    - utopia_guest
+  cli:
+    - utopia_guest
+
+known_plugin_toolsets:
+  webhook:
+    - utopia_guest
+  cli:
+    - utopia_guest
+
+approvals:
+  mode: manual
+  timeout: 60
+  cron_mode: deny
+
+security:
+  allow_lazy_installs: false
+
+unauthorized_dm_behavior: ignore
+
+command_allowlist: []

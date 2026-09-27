@@ -265,6 +265,63 @@ UPDATE_WORK_SCHEMA = {
 }
 
 
+_TURN_ID = {"type": "string", "pattern": "^gt-[a-z0-9]{12}$"}
+
+GUEST_QUEUE_SCHEMA = {
+    "name": "utopia_guest_queue",
+    "description": (
+        "Show guest messages waiting on a person: drafts guest Lucy wrote (with the gate's "
+        "verdict and notes) and conversations she handed over (with her reason)."
+    ),
+    "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+}
+
+DECIDE_GUEST_SCHEMA = {
+    "name": "utopia_decide_guest_reply",
+    "description": (
+        "Record Ray's decision on a queued guest reply: approve it as written, edit it (give the "
+        "final text and what the edit fixed), or reject it. Use exactly Ray's words for edits."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "turn_id": _TURN_ID,
+            "action": {"type": "string", "enum": ["approve", "edit", "reject"]},
+            "final_text": {"type": "string", "maxLength": 2000},
+            "edit_categories": {
+                "type": "array",
+                "items": {
+                    "type": "string",
+                    "enum": ["fact", "tone", "length", "policy", "missing_info", "other"],
+                },
+            },  # fmt: skip
+            "reason": {"type": "string", "maxLength": 500},
+        },
+        "required": ["turn_id", "action"],
+        "additionalProperties": False,
+    },
+}
+
+TRY_GUEST_SCHEMA = {
+    "name": "utopia_try_guest_message",
+    "description": (
+        "TEST ONLY: send a pretend guest message for a home (a TEST reservation next week) so "
+        "Ray can see what guest Lucy drafts. The draft appears in utopia_guest_queue within a "
+        "minute."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "slug": _SLUG,
+            "message": {"type": "string", "minLength": 1, "maxLength": 1000},
+            "guests": {"type": "integer", "minimum": 1, "maximum": 40},
+        },
+        "required": ["slug", "message"],
+        "additionalProperties": False,
+    },
+}
+
+
 def _operator() -> str:
     return f"{os.environ.get('UTOPIA_LUCY_OPERATOR_NAME', 'operator')} via Utopia Lucy"
 
@@ -445,6 +502,55 @@ def _update_work(args: dict[str, Any], **_: Any) -> str:
     )
 
 
+def _guest_queue(args: dict[str, Any], **_: Any) -> str:
+    raw = _call("GET", "/internal/v1/guest/turns?limit=20")
+    try:
+        turns = json.loads(raw)["turns"]
+    except (ValueError, KeyError, TypeError):
+        return raw
+    keep = ("id", "property_slug", "state", "guest_message", "draft", "gate", "gate_notes",
+            "escalation", "proposed_work")  # fmt: skip
+    return json.dumps({"turns": [{k: t.get(k) for k in keep if t.get(k)} for t in turns]})
+
+
+def _decide_guest(args: dict[str, Any], **_: Any) -> str:
+    body = {
+        "action": args.get("action"),
+        "decided_by": _operator(),
+        "final_text": args.get("final_text"),
+        "edit_categories": list(args.get("edit_categories") or []),
+        "reason": str(args.get("reason") or ""),
+    }
+    turn = urllib.parse.quote(str(args["turn_id"]))
+    return _call("POST", f"/internal/v1/guest/turns/{turn}/decision", body)
+
+
+def _try_guest(args: dict[str, Any], **_: Any) -> str:
+    from datetime import date, timedelta
+
+    start = date.today() + timedelta(days=7)
+    reservation = _call(
+        "POST",
+        "/internal/v1/reservations",
+        {
+            "property_slug": args.get("slug"),
+            "check_in": start.isoformat(),
+            "check_out": (start + timedelta(days=3)).isoformat(),
+            "guests": int(args.get("guests") or 10),
+            "label": "TEST from Telegram",
+        },
+    )
+    try:
+        reservation_id = json.loads(reservation)["reservation"]["id"]
+    except (ValueError, KeyError, TypeError):
+        return reservation
+    return _call(
+        "POST",
+        "/internal/v1/guest/turns",
+        {"reservation_id": reservation_id, "message": str(args.get("message") or "")},
+    )
+
+
 def register(ctx: Any) -> None:
     for schema, handler, emoji in (
         (LIST_SCHEMA, _list, "🏠"),
@@ -458,6 +564,9 @@ def register(ctx: Any) -> None:
         (OPEN_WORK_SCHEMA, _open_work, "🧰"),
         (LIST_WORK_SCHEMA, _list_work, "📋"),
         (UPDATE_WORK_SCHEMA, _update_work, "🔧"),
+        (GUEST_QUEUE_SCHEMA, _guest_queue, "📥"),
+        (DECIDE_GUEST_SCHEMA, _decide_guest, "✅"),
+        (TRY_GUEST_SCHEMA, _try_guest, "🧪"),
     ):
         ctx.register_tool(
             name=schema["name"],

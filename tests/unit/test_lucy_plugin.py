@@ -146,3 +146,48 @@ def test_a_property_read_can_ask_for_just_some_fields(monkeypatch: pytest.Monkey
         "property": {"slug": "the-shamrock", "parking": "Parking for 8 cars."},
         "unconfirmed_fields": ["parking"],
     }
+
+
+def test_every_registered_tool_is_declared_in_the_manifest():
+    for name in ("profile/plugins/utopia_business", "guest/plugins/utopia_guest"):
+        spec = importlib.util.spec_from_file_location(name, ROOT / "lucy" / name / "__init__.py")
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        ctx = FakeContext()
+        module.register(ctx)
+        manifest = (ROOT / "lucy" / name / "plugin.yaml").read_text(encoding="utf-8")
+        declared = {line.strip()[2:] for line in manifest.splitlines() if line.startswith("  - ")}
+        assert declared == set(ctx.tools), name
+
+
+def test_guest_tools_refuse_to_run_outside_a_guest_turn(monkeypatch: pytest.MonkeyPatch):
+    spec = importlib.util.spec_from_file_location(
+        "utopia_guest", ROOT / "lucy/guest/plugins/utopia_guest/__init__.py"
+    )
+    assert spec is not None and spec.loader is not None
+    guest = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(guest)
+    monkeypatch.setenv("UTOPIA_BUSINESS_API_URL", "http://core.test")
+    monkeypatch.setenv("UTOPIA_BUSINESS_GUEST_TOKEN", "g" * 40)
+    assert "not a guest turn" in guest._context({})
+    monkeypatch.setattr(guest, "_turn_id", lambda: "gt-000000000001")
+    calls = []
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_: Any) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b"{}"
+
+    def fake_urlopen(request, timeout):
+        calls.append(request.full_url)
+        return Response()
+
+    monkeypatch.setattr(guest.urllib.request, "urlopen", fake_urlopen)
+    guest._reply({"text": "Hi!", "cited_ids": ["record"]})
+    assert calls == ["http://core.test/guest/v1/turns/gt-000000000001/reply"]

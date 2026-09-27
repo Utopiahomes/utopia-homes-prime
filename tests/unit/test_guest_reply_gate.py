@@ -145,3 +145,8 @@ def test_promises_and_claimed_actions_go_to_a_person():
 def test_another_homes_name_needs_review_and_uncited_claims_too():
     assert "wrong_home" in verdict("The Shamrock has a garage too.", ["pool"]).codes
     assert "uncited" in verdict("The pool is heated to 84 degrees.").codes
+
+
+def test_the_home_record_can_be_cited():
+    v = verdict("Check-in is at 4 PM and checkout at 10 AM.", ["record"])
+    assert v.decision == "send", v.findings

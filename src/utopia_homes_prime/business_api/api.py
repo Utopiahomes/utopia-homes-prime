@@ -37,6 +37,13 @@ from utopia_homes_prime.business_api.logging_utils import (
     digest_idempotency_key,
     digest_session_id,
 )
+from utopia_homes_prime.business_core.guest import (
+    GuestDesk,
+    GuestStore,
+    MemoryGuestStore,
+    PostgresGuestStore,
+)
+from utopia_homes_prime.business_core.guest_routes import GuestWaker, register_guest_routes
 from utopia_homes_prime.business_core.knowledge_items import (
     KnowledgeItemStore,
     PostgresKnowledgeItemStore,
@@ -375,6 +382,7 @@ def create_app(
     business_store: PropertyStore | None = None,
     knowledge_store: KnowledgeItemStore | None = None,
     work_store: WorkStore | None = None,
+    guest_store: GuestStore | None = None,
 ) -> FastAPI:
     """`execution_transport` exists only so tests can route the selected inference backend
     client to an in-process fake; runtime wiring always uses the default network transport.
@@ -383,6 +391,7 @@ def create_app(
     store: PropertyStore | None = None
     items: KnowledgeItemStore | None = None
     work: WorkStore | None = None
+    guests: GuestStore | None = None
     if config.business is not None:
         store = business_store or PostgresPropertyStore(config.business.database_url)
         items = knowledge_store or PostgresKnowledgeItemStore(config.business.database_url)
@@ -391,6 +400,11 @@ def create_app(
             MemoryWorkStore()
             if business_store is not None
             else PostgresWorkStore(config.business.database_url)
+        )
+        guests = guest_store or (
+            MemoryGuestStore()
+            if business_store is not None
+            else PostgresGuestStore(config.business.database_url)
         )
         if config.business.seed_path:
             seed = json.loads(Path(config.business.seed_path).read_text(encoding="utf-8"))
@@ -502,13 +516,31 @@ def create_app(
     if config.business is not None:
         assert store is not None
         app.state.business_store = store
-        assert work is not None
+        assert work is not None and items is not None and guests is not None
+        desk = WorkDesk(work)
         register_business_routes(
+            app, store=store, lucy_token=config.business.lucy_token, items=items, work=desk
+        )
+        business = config.business
+        register_guest_routes(
             app,
-            store=store,
-            lucy_token=config.business.lucy_token,
-            items=items,
-            work=WorkDesk(work),
+            GuestDesk(
+                guests,
+                store,
+                items,
+                desk,
+                approved_hostnames=tuple(
+                    config.homes_prime.approved_hostnames if config.homes_prime else ()
+                )
+                or ("www.utopiahomes.com",),
+                support_phone=business.support_phone,
+            ),
+            guest_token=business.guest_token,
+            waker=(
+                GuestWaker(business.guest_worker_url, business.guest_webhook_secret)
+                if business.guest_worker_url and business.guest_webhook_secret
+                else None
+            ),
         )
 
     @app.get("/healthz")

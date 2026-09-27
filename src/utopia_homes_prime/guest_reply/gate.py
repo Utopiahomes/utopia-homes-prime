@@ -43,6 +43,10 @@ Decision = Literal["send", "review", "block"]
 class Draft:
     text: str
     cited_ids: tuple[str, ...] = ()
+    """Knowledge item ids, or `record` for the home's own record (always in the context)."""
+
+
+RECORD = "record"
 
 
 @dataclass(frozen=True)
@@ -225,6 +229,8 @@ def check_reply(draft: Draft, ctx: ReplyContext) -> Verdict:
 
     # 5. Evidence: every citation must exist, be approved, fit this guest, and be about this home.
     for cited in draft.cited_ids:
+        if cited == RECORD:
+            continue
         item = ctx.evidence.get(cited)
         if item is None:
             review("unknown_evidence", f"cites {cited}, which does not exist")
@@ -298,6 +304,8 @@ def gather_context(
     up."""
     evidence: dict[str, KnowledgeItem] = {}
     for cited in draft.cited_ids:
+        if cited == RECORD:
+            continue
         with contextlib.suppress(ItemNotFound):  # a made-up id stays missing; the gate flags it
             evidence[cited] = items.get(cited)
     return ReplyContext(

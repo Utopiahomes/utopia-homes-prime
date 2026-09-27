@@ -394,6 +394,12 @@ class BusinessCoreConfig:
     database_url: str
     lucy_token: str
     seed_path: str | None
+    guest_token: str | None = None
+    """Guest Lucy's token: only her turn-scoped /guest/v1 routes accept it."""
+    guest_worker_url: str | None = None
+    """Guest Lucy's webhook, e.g. http://utopia-lucy-guest:8644/webhooks/guest_turn."""
+    guest_webhook_secret: str | None = None
+    support_phone: str | None = None
 
     @classmethod
     def from_environment(cls, env: Mapping[str, str]) -> BusinessCoreConfig | None:
@@ -404,7 +410,25 @@ class BusinessCoreConfig:
         if len(token) < 32:
             raise ConfigError("UTOPIA_BUSINESS_LUCY_TOKEN must be at least 32 characters")
         seed = (env.get("UTOPIA_BUSINESS_SEED_PATH") or "").strip() or None
-        return cls(database_url=url, lucy_token=token, seed_path=seed)
+        guest = (env.get("UTOPIA_BUSINESS_GUEST_TOKEN") or "").strip() or None
+        if guest is not None and (len(guest) < 32 or guest == token):
+            raise ConfigError(
+                "UTOPIA_BUSINESS_GUEST_TOKEN must be at least 32 characters and differ from "
+                "Lucy's token"
+            )
+        worker = (env.get("UTOPIA_GUEST_WORKER_URL") or "").strip() or None
+        secret = (env.get("UTOPIA_GUEST_WEBHOOK_SECRET") or "").strip() or None
+        if worker and not secret:
+            raise ConfigError("UTOPIA_GUEST_WORKER_URL needs UTOPIA_GUEST_WEBHOOK_SECRET")
+        return cls(
+            database_url=url,
+            lucy_token=token,
+            seed_path=seed,
+            guest_token=guest,
+            guest_worker_url=worker,
+            guest_webhook_secret=secret,
+            support_phone=(env.get("UTOPIA_SUPPORT_PHONE") or "").strip() or None,
+        )
 
 
 LATEST_APPROVED_KNOWLEDGE: Final = "latest-approved"

@@ -36,6 +36,13 @@ _SIGNOFF = re.compile(
     r"(?m)^((?i:thanks|thank you|best|cheers|regards|sincerely)[!,.]*\s*)\n?"
     r"([A-Z][a-z'’-]{1,20})[ \t]*[!.]*\s*$"
 )
+# "it's Jennifer", "this is Sam", "my name is Pat". Weekdays and months are not names.
+_INTRO = re.compile(
+    r"\b((?i:i'?m|i am|it'?s|it is|this is|my name is|name's))\s+"
+    r"(?!(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|"
+    r"April|May|June|July|August|September|October|November|December)\b)"
+    r"([A-Z][a-z'’-]{1,20})\b"
+)
 # A name alone on the last line ("...Thank you!\n\nJordan !"). Over-scrubs a lone "Ok" at worst.
 _LAST_LINE_NAME = re.compile(r"(\n\s*)([A-Z][a-z'’-]{1,20})[ \t]*[!.]*\s*\Z")
 _HOST_NAMES = frozenset({"Meghan", "Meg", "Ray", "Raymond", "Utopia", "Lucy", "There", "All",
@@ -83,6 +90,9 @@ def _scrub(text: str, keep_names: frozenset[str]) -> str:
     )
     text = _SIGNOFF.sub(
         lambda m: m.group(0) if m.group(2) in keep_names else f"{m.group(1)}[GUEST]", text
+    )
+    text = _INTRO.sub(
+        lambda m: m.group(0) if m.group(2) in keep_names else f"{m.group(1)} [GUEST]", text
     )
     text = _LAST_LINE_NAME.sub(
         lambda m: m.group(0) if m.group(2) in keep_names else f"{m.group(1)}[GUEST]", text
