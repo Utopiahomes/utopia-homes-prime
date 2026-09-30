@@ -155,8 +155,12 @@ def test_stay_rules_and_bed_layout_become_guest_knowledge():
         changed_by="Ray",
         reason="interview",
     )
+    # Build and read the corpus on the same day; built with the real date it became a time bomb.
     live = LiveKnowledgeProjection(
-        store, BASE, approved_hostnames=frozenset({"www.utopiahomes.com"})
+        store,
+        BASE,
+        approved_hostnames=frozenset({"www.utopiahomes.com"}),
+        today=lambda: date(2026, 9, 27),
     )
     entries = live.effective(datetime(2026, 9, 27, tzinfo=UTC), enforce_cap=False).entries_by_id
     assert "check-in is at 4:00 PM" in entries["buttercup-stay-rules"].approved_text
