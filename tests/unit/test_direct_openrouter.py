@@ -4,6 +4,7 @@ intent (exact model, ZDR routing, price ceilings, bounded charge), for the async
 
 from __future__ import annotations
 
+import dataclasses
 import time
 
 import httpx
@@ -150,3 +151,17 @@ async def test_transport_failure_is_unavailable():
                 _call(), deadline=Deadline(time.monotonic() + 10)
             )
     assert (failure.value.category, failure.value.code) == ("unavailable", "transport")
+
+
+async def test_a_search_route_asks_openrouter_for_one_web_search():
+    fake = FakeOpenRouter()
+    fake.script("homes-test-output", Reply({"answer": "hi"}))
+    async with httpx.AsyncClient(transport=fake.transport()) as http:
+        backend = _backend(fake, http)
+        backend._settings = dataclasses.replace(
+            backend._settings, web_search_engine="native", web_search_max_results=3
+        )
+        await backend.infer(_call(), deadline=Deadline(time.monotonic() + 10))
+    assert fake.requests[0]["body"]["plugins"] == [
+        {"id": "web", "engine": "native", "max_results": 3}
+    ]

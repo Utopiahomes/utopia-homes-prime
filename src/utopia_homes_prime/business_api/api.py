@@ -65,9 +65,11 @@ from utopia_homes_prime.business_core.work import (
 from utopia_homes_prime.config import (
     MEETING_DRAFT_BUDGET_MS,
     MEETING_RESPOND_BUDGET_MS,
+    MEETING_SEARCH_BUDGET_MS,
     Config,
     ExecutionProfileConfig,
     HomesPrimeConfig,
+    MeetingSearchConfig,
 )
 from utopia_homes_prime.guest_answer import legacy_bridge, patterns, schema_validation
 from utopia_homes_prime.guest_answer.bundle_tools import check_invariants_impl
@@ -344,6 +346,30 @@ def _profile_fields(profile: ExecutionProfileConfig) -> tuple[str, int, int, int
     )
 
 
+def _search_backend(
+    prime: HomesPrimeConfig,
+    search: MeetingSearchConfig,
+    http: httpx.AsyncClient,
+    transit_allowance_ms: int,
+) -> InferenceBackend:
+    """Homes' own route with OpenRouter web search, for current-events meeting questions."""
+    assert prime.direct is not None
+    return DirectOpenRouterBackend(
+        settings=DirectProviderSettings(
+            api_key=prime.direct.api_key,
+            model=search.model,
+            allowed_providers=search.allowed_providers,
+            max_prompt_usd_per_million=search.max_prompt_usd_per_million,
+            max_completion_usd_per_million=search.max_completion_usd_per_million,
+            referer=prime.direct.referer,
+            transit_allowance_ms=transit_allowance_ms,
+            web_search_engine=search.engine,
+            web_search_max_results=search.max_results,
+        ),
+        http=http,
+    )
+
+
 def _inference_backend(
     prime: HomesPrimeConfig, http: httpx.AsyncClient, transit_allowance_ms: int
 ) -> InferenceBackend:
@@ -472,6 +498,24 @@ def create_app(
                     backend=backend,
                     # The same public knowledge the website answers use, refreshed the same way.
                     projection=projection,
+                    search=(
+                        OperationSettings(
+                            *_profile_fields(config.meeting.search.profile),
+                            MEETING_SEARCH_BUDGET_MS,
+                        )
+                        if config.meeting.search
+                        else None
+                    ),
+                    search_backend=(
+                        _search_backend(
+                            prime,
+                            config.meeting.search,
+                            inference_http,
+                            settings.transit_allowance_ms,
+                        )
+                        if config.meeting.search
+                        else None
+                    ),
                 )
             yield
 

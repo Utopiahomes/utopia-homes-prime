@@ -147,10 +147,14 @@ def reply(
     outcome: str = "answered",
     display: str | None = "homes-owner-onboarding-checklist-demo-v1@1",
     reason: str | None = None,
+    kind: str = "utopia",
+    search_query: str = "",
 ) -> dict[str, Any]:
     return {
+        "kind": kind,
         "outcome": outcome,
         "answer": answer,
+        "search_query": search_query,
         "display_material": display,
         "decline_reason": reason,
     }

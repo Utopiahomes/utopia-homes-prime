@@ -41,6 +41,9 @@ class DirectProviderSettings:
     max_completion_usd_per_million: float
     referer: str
     transit_allowance_ms: int
+    web_search_engine: str | None = None
+    """When set ("native" or "exa"), every call runs one OpenRouter web search first."""
+    web_search_max_results: int = 5
 
 
 class _Usage(BaseModel):
@@ -114,6 +117,14 @@ class DirectOpenRouterBackend:
             },
             "provider": provider,
         }
+        if settings.web_search_engine:
+            body["plugins"] = [
+                {
+                    "id": "web",
+                    "engine": settings.web_search_engine,
+                    "max_results": settings.web_search_max_results,
+                }
+            ]
         if settings.model.startswith("openai/gpt-5"):
             body["max_completion_tokens"] = call.max_output_tokens
             body["reasoning"] = {"effort": "low", "exclude": True}

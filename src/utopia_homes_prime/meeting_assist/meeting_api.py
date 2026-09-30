@@ -26,6 +26,7 @@ from utopia_homes_prime.business_api.logging_utils import access_log, digest_ide
 from utopia_homes_prime.config import (
     MEETING_DRAFT_BUDGET_MS,
     MEETING_RESPOND_BUDGET_MS,
+    MEETING_SEARCH_BUDGET_MS,
     Config,
 )
 from utopia_homes_prime.guest_answer import patterns
@@ -258,7 +259,8 @@ def register_meeting_routes(
             request,
             operation="meeting.respond",
             canonical=canonical,
-            budget_ms=MEETING_RESPOND_BUDGET_MS,
+            # A current-events answer may add one web-search call after the first.
+            budget_ms=MEETING_RESPOND_BUDGET_MS + MEETING_SEARCH_BUDGET_MS,
             call=lambda: engine.respond(parsed, materials),
         )
 

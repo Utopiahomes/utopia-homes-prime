@@ -314,9 +314,27 @@ DEFAULT_MEETING_PROFILE_ID: Final = "utopia-homes.meeting-assist.v1"
 MEETING_RESPOND_BUDGET_MS: Final = 10_000
 """Homes' own cap on one respond call. The spoken-answer target is 3-5 s and routine answers over
 8-10 s are investigated; the cap must also fit inside Tiamat's authorized execution deadlines."""
+MEETING_SEARCH_BUDGET_MS: Final = 9_000
+"""Extra time a current-events answer may take for its web-search call, after the first call."""
+MEETING_SEARCH_MAX_COST_MICROUSD: Final = 60_000
+"""Ray's approved ceiling for one search answer ($0.06, 2026-09-30). Config cannot exceed it."""
 MEETING_DRAFT_BUDGET_MS: Final = 20_000
 """Homes' own cap on one draft call (target: a complete draft within 10-15 s)."""
 MAX_MEETING_IDEMPOTENCY_TTL_SECONDS: Final = 900
+
+
+@dataclass(frozen=True, slots=True)
+class MeetingSearchConfig:
+    """The web-search route for current-events questions (direct-openrouter only). Its model and
+    price ceilings are deployment policy; the credential is the direct route's own."""
+
+    profile: ExecutionProfileConfig
+    model: str
+    engine: str
+    max_results: int
+    allowed_providers: tuple[str, ...]
+    max_prompt_usd_per_million: float
+    max_completion_usd_per_million: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -329,6 +347,7 @@ class MeetingConfig:
     materials_path: str
     materials_allowed_digests: frozenset[str]
     idempotency_ttl_seconds: int
+    search: MeetingSearchConfig | None = None
 
     @classmethod
     def from_environment(cls, env: Mapping[str, str], *, prime: HomesPrimeConfig) -> MeetingConfig:
@@ -376,7 +395,48 @@ class MeetingConfig:
         if not digests or not all(re.fullmatch(r"[a-f0-9]{64}", item) for item in digests):
             raise ConfigError(f"{prefix}MATERIALS_ALLOWED_DIGESTS must be lowercase SHA-256 values")
 
+        search: MeetingSearchConfig | None = None
+        search_model = value("SEARCH_MODEL", "")
+        if search_model:
+            if prime.direct is None:
+                raise ConfigError(f"{prefix}SEARCH_MODEL needs the direct-openrouter backend")
+            if len(search_model) > 200 or search_model.startswith("~"):
+                raise ConfigError(f"{prefix}SEARCH_MODEL must be an exact public model identifier")
+            engine = value("SEARCH_ENGINE", "native")
+            if engine not in ("native", "exa"):
+                raise ConfigError(f"{prefix}SEARCH_ENGINE must be 'native' or 'exa'")
+
+            def price(name: str) -> float:
+                try:
+                    parsed = float(value(name, None))
+                except ValueError as exc:
+                    raise ConfigError(f"{prefix}{name} must be a number") from exc
+                if not 0 < parsed < 1_000:
+                    raise ConfigError(f"{prefix}{name} must be a positive USD-per-million price")
+                return parsed
+
+            profile = operation("SEARCH", "7000", "600", MEETING_SEARCH_BUDGET_MS)
+            if profile.max_cost_microusd > MEETING_SEARCH_MAX_COST_MICROUSD:
+                raise ConfigError(
+                    f"{prefix}SEARCH_MAX_COST_MICROUSD must be at most "
+                    f"{MEETING_SEARCH_MAX_COST_MICROUSD}"
+                )
+            search = MeetingSearchConfig(
+                profile=profile,
+                model=search_model,
+                engine=engine,
+                max_results=integer("SEARCH_MAX_RESULTS", "5", 1, 10),
+                allowed_providers=tuple(
+                    item.strip()
+                    for item in value("SEARCH_ALLOWED_PROVIDERS", "").split(",")
+                    if item.strip()
+                ),
+                max_prompt_usd_per_million=price("SEARCH_MAX_PROMPT_USD_PER_MILLION"),
+                max_completion_usd_per_million=price("SEARCH_MAX_COMPLETION_USD_PER_MILLION"),
+            )
+
         return cls(
+            search=search,
             respond=operation("RESPOND", "6000", "1200", MEETING_RESPOND_BUDGET_MS),
             draft=operation("DRAFT", "15000", "2500", MEETING_DRAFT_BUDGET_MS),
             materials_path=value("MATERIALS_PATH", None),
