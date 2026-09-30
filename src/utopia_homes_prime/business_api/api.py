@@ -470,6 +470,8 @@ def create_app(
                     transit_allowance_ms=settings.transit_allowance_ms,
                     reserve_ms=settings.prime_reserve_ms,
                     backend=backend,
+                    # The same public knowledge the website answers use, refreshed the same way.
+                    projection=projection,
                 )
             yield
 

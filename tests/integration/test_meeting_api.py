@@ -65,7 +65,7 @@ def test_identity_reports_homes_dragon_and_exact_materials(dragon):
     assert response.json() == {
         "contract_version": "1.0",
         "synth_id": "stoin:synth:utopia-homes-prime",
-        "display_name": "Homes Dragon",
+        "display_name": "Lucy",
         "software_version": "homes-business:release:test.1",
         "approved_materials": [
             {
@@ -528,3 +528,36 @@ def test_startup_refuses_materials_outside_the_allowlist(tmp_path):
     prime, _ = build_meeting_env(tmp_path, allowed_digest="0" * 64)
     with pytest.raises(MaterialsUnavailable, match="allowlisted"):
         create_app(config=Config.from_environment(prime.env))
+
+
+def test_answers_use_the_public_knowledge_and_its_numbers(dragon):
+    dragon.fake.script(
+        MEETING_PROFILE,
+        success(reply("Harbor Light sleeps 12 guests and has parking for 3 cars.", display=None)),
+    )
+    body = respond_body("How many guests can Harbor Light take?")
+    with TestClient(dragon.app()) as client:
+        response = client.post(RESPOND, json=body, headers=dragon.headers())
+    assert response.json()["outcome"] == "answered"
+    system = next(iter(message["content"] for message in _messages(dragon)))
+    assert "PUBLIC_CONTEXT=" in system and "Harbor Light welcomes up to 12 guests" in system
+
+
+@pytest.mark.parametrize(
+    ("answer", "display", "outcome"),
+    [
+        ("I've put the onboarding checklist on screen for everyone.", None, "unavailable"),
+        ("I'm sharing the checklist now.", None, "unavailable"),
+        (
+            "I've put the onboarding checklist on screen for everyone.",
+            "homes-owner-onboarding-checklist-demo-v1@1",
+            "answered",
+        ),
+        ("I can show you the checklist if that helps.", None, "answered"),
+    ],
+)
+def test_lucy_never_claims_to_show_something_she_did_not_show(dragon, answer, display, outcome):
+    dragon.fake.script(MEETING_PROFILE, success(reply(answer, display=display)))
+    with TestClient(dragon.app()) as client:
+        response = client.post(RESPOND, json=respond_body(), headers=dragon.headers())
+    assert response.json()["outcome"] == outcome
