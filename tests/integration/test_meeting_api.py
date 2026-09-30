@@ -258,14 +258,17 @@ def test_declined_requests_carry_no_answer_or_material(dragon):
         reply("   "),
     ],
 )
-def test_output_breaking_homes_rules_becomes_unavailable(dragon, content):
-    dragon.fake.script(MEETING_PROFILE, success(content))
+def test_output_breaking_homes_rules_twice_becomes_an_honest_line(dragon, content):
+    dragon.fake.script(MEETING_PROFILE, success(content), success(content))
     with TestClient(dragon.app()) as client:
         response = client.post(RESPOND, json=respond_body(), headers=dragon.headers())
     assert response.status_code == 200
     result = response.json()
-    assert (result["outcome"], result["answer"], result["limitations"]) == ("unavailable", "", [])
+    assert result["outcome"] == "answered"
+    assert result["answer"].startswith("Sorry, I couldn't find a reliable answer")
+    assert result["limitations"] == []
     assert "display_material" not in result
+    assert len(dragon.fake.attempts) == 2  # one corrected retry before giving up
 
 
 def test_numbers_from_the_conversation_or_materials_are_allowed(dragon):
@@ -543,21 +546,57 @@ def test_answers_use_the_public_knowledge_and_its_numbers(dragon):
     assert "PUBLIC_CONTEXT=" in system and "Harbor Light welcomes up to 12 guests" in system
 
 
-@pytest.mark.parametrize(
-    ("answer", "display", "outcome"),
-    [
-        ("I've put the onboarding checklist on screen for everyone.", None, "unavailable"),
-        ("I'm sharing the checklist now.", None, "unavailable"),
-        (
-            "I've put the onboarding checklist on screen for everyone.",
-            "homes-owner-onboarding-checklist-demo-v1@1",
-            "answered",
-        ),
-        ("I can show you the checklist if that helps.", None, "answered"),
-    ],
-)
-def test_lucy_never_claims_to_show_something_she_did_not_show(dragon, answer, display, outcome):
-    dragon.fake.script(MEETING_PROFILE, success(reply(answer, display=display)))
+def _answer(dragon, *contents, body=None):
+    dragon.fake.script(MEETING_PROFILE, *(success(content) for content in contents))
     with TestClient(dragon.app()) as client:
-        response = client.post(RESPOND, json=respond_body(), headers=dragon.headers())
-    assert response.json()["outcome"] == outcome
+        response = client.post(RESPOND, json=body or respond_body(), headers=dragon.headers())
+    return response.json()
+
+
+def test_a_claimed_display_is_made_true_when_the_material_is_clear(dragon):
+    result = _answer(dragon, reply("I've put the onboarding checklist on screen.", display=None))
+    assert result["outcome"] == "answered"
+    assert result["display_material"] == CHECKLIST
+
+
+def test_a_claim_with_nothing_to_show_is_dropped_and_the_rest_is_spoken(dragon):
+    body = respond_body(materials=[dict(CHECKLIST), dict(BRIEF)])
+    result = _answer(
+        dragon,
+        reply("The owner portal handles that. I've put it on screen for you.", display=None),
+        body=body,
+    )
+    assert result["outcome"] == "answered"
+    assert result["answer"] == "The owner portal handles that."
+    assert "display_material" not in result
+
+
+def test_offers_to_show_are_fine(dragon):
+    result = _answer(dragon, reply("I can show you the checklist if that helps.", display=None))
+    assert (result["outcome"], result["answer"]) == (
+        "answered",
+        "I can show you the checklist if that helps.",
+    )
+
+
+def test_a_rejected_answer_is_retried_once_with_the_reason(dragon):
+    result = _answer(
+        dragon,
+        reply("Our management fee is 25 percent."),
+        reply("I don't have the fee in front of me; let's note it as an open question."),
+    )
+    assert result["outcome"] == "answered"
+    assert result["answer"].startswith("I don't have the fee")
+    assert len(dragon.fake.attempts) == 2
+    user = dragon.fake.attempts[-1].document["messages"][-1]["content"]
+    assert "CORRECTION=" in user and "number" in user.split("CORRECTION=")[1]
+
+
+def test_two_rejected_answers_become_an_honest_line_not_silence(dragon):
+    result = _answer(
+        dragon,
+        reply("Our management fee is 25 percent."),
+        reply("Actually it is 30 percent."),
+    )
+    assert result["outcome"] == "answered"
+    assert result["answer"].startswith("Sorry, I couldn't find a reliable answer")

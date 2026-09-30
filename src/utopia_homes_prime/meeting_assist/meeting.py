@@ -410,6 +410,48 @@ _CLAIMED_DISPLAY = re.compile(
 )
 
 
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
+_TITLE_NOISE = {"utopia", "homes", "demo", "v1", "the", "and", "for", "owner"}
+
+
+def _material_for_claim(answer: str, materials: tuple[Material, ...]) -> str | None:
+    """The one listed material a claimed display most plausibly means, or None."""
+    lowered = answer.casefold()
+    named = [
+        m
+        for m in materials
+        if m.kind.casefold() in lowered
+        or any(
+            word in lowered
+            for word in m.title.casefold().replace("—", " ").split()
+            if len(word) > 3 and word not in _TITLE_NOISE
+        )
+    ]
+    if len(named) == 1:
+        return named[0].key
+    return materials[0].key if len(materials) == 1 and not named else None
+
+
+def _without_claims(answer: str) -> str:
+    kept = [s for s in _SENTENCE_BREAK.split(answer) if not _CLAIMED_DISPLAY.search(s)]
+    return " ".join(kept).strip()
+
+
+# Spoken when two attempts both break Homes rules. Fixed text, never model output.
+FALLBACK_ANSWER: Final = (
+    "Sorry, I couldn't find a reliable answer to that. Could you ask it another way?"
+)
+RETRY_GUIDANCE: Final = {
+    "unsupported_number": "Your reply used a number that is not in PUBLIC_CONTEXT, "
+    "APPROVED_MATERIALS, or MEETING_TURN. Use only numbers from those, or answer without it.",
+    "markup": "Your reply had formatting or a link. Reply in plain speakable sentences only.",
+    "empty_answer": "Your reply was empty. Give a short spoken answer.",
+    "unperformed_action": "Your reply said you were showing something without setting "
+    "display_material. Set it to a listed key, or do not say you are showing anything.",
+    "display_material": "display_material must be one of the listed keys, or null.",
+}
+
+
 def knowledge_sources(knowledge: EffectiveKnowledge | None) -> list[str]:
     if knowledge is None:
         return []
@@ -447,7 +489,13 @@ def check_reply(
         raise OutputRejected("unsupported_number")
     key = content["display_material"]
     if key is None and _CLAIMED_DISPLAY.search(answer):
-        raise OutputRejected("unperformed_action")
+        # She said she is showing something she did not ask to show: make it true when the
+        # material is clear, otherwise drop the claim and keep the rest of the answer.
+        key = _material_for_claim(answer, materials)
+        if key is None:
+            answer = _without_claims(answer)
+            if not answer:
+                raise OutputRejected("unperformed_action")
     reply: dict[str, Any] = {"outcome": "answered", "answer": answer, "limitations": []}
     if key is not None:
         chosen = next((m for m in materials if m.key == key), None)
@@ -579,6 +627,27 @@ class MeetingEngine:
         texts = [line.text for line in request.context] + [request.message]
         return effective.select(subject_id=None, texts=texts)
 
+    async def _respond_once(
+        self,
+        request: RespondRequest,
+        materials: tuple[Material, ...],
+        knowledge: EffectiveKnowledge | None,
+        correction: str | None = None,
+    ) -> dict[str, Any]:
+        system, user = build_respond_messages(request, materials, knowledge)
+        if correction:
+            # The execution contract takes one system and one user message, so the correction
+            # rides on the user message.
+            user = ExecutionMessage("user", f"{user.content}\n\nCORRECTION={correction}")
+        messages = (system, user)
+        content = await self._execute(
+            "respond",
+            self._respond,
+            messages,
+            JsonSchemaOutput(RESPOND_SCHEMA_NAME, respond_schema(materials)),
+        )
+        return check_reply(content, request, materials, knowledge)
+
     async def respond(
         self, request: RespondRequest, materials: tuple[Material, ...]
     ) -> dict[str, Any]:
@@ -590,22 +659,27 @@ class MeetingEngine:
             "turn_id": request.turn_id,
         }
         knowledge = self._knowledge_for(request)
+        started = self._monotonic()
         try:
-            content = await self._execute(
-                "respond",
-                self._respond,
-                build_respond_messages(request, materials, knowledge),
-                JsonSchemaOutput(RESPOND_SCHEMA_NAME, respond_schema(materials)),
-            )
-            reply = check_reply(content, request, materials, knowledge)
+            try:
+                reply = await self._respond_once(request, materials, knowledge)
+            except OutputRejected as rejection:
+                # Try once more, told what was wrong, while there is time for a second answer.
+                elapsed_ms = (self._monotonic() - started) * 1000
+                if elapsed_ms > self._respond.budget_ms / 2:
+                    raise
+                reply = await self._respond_once(
+                    request, materials, knowledge, RETRY_GUIDANCE.get(rejection.category)
+                )
         except InferenceFailure as failure:
             self.last_telemetry = MeetingTelemetry(
                 "respond", "execute", failure.code or failure.category, failure.attempts
             )
             return {**body, "outcome": "unavailable", "answer": "", "limitations": []}
         except OutputRejected as rejection:
+            # Say so rather than go quiet: silence looks like ignoring the question.
             self.last_telemetry = MeetingTelemetry("respond", "validate", rejection.category)
-            return {**body, "outcome": "unavailable", "answer": "", "limitations": []}
+            return {**body, "outcome": "answered", "answer": FALLBACK_ANSWER, "limitations": []}
         self.last_telemetry = MeetingTelemetry("respond", "complete", reply["outcome"])
         return {**body, **reply}
 
