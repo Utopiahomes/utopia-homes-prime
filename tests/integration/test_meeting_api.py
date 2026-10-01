@@ -600,3 +600,33 @@ def test_two_rejected_answers_become_an_honest_line_not_silence(dragon):
     )
     assert result["outcome"] == "answered"
     assert result["answer"].startswith("Sorry, I couldn't find a reliable answer")
+
+
+LEASE_PAGES = [
+    {"name": "Lease.pdf", "page": 1, "text": "Residential lease between the owner and the tenant."},
+    {"name": "Lease.pdf", "page": 4, "text": "The security deposit is $2,400, due at signing."},
+]
+
+
+def test_shared_files_reach_lucy_page_by_page_with_the_page_on_screen(dragon):
+    body = respond_body(
+        "What's the deposit on this page?",
+        documents=LEASE_PAGES,
+        on_screen={"name": "Lease.pdf", "page": 4},
+    )
+    result = _answer(
+        dragon, reply("Page 4 of the lease says the deposit is $2,400.", display=None), body=body
+    )
+    # The deposit's number comes from the shared file, so the Homes number check accepts it.
+    assert result["outcome"] == "answered" and "2,400" in result["answer"]
+    system, user = (message["content"] for message in _messages(dragon))
+    assert "SHARED_DOCUMENTS=" in system and "The security deposit is $2,400" in system
+    assert '"on_screen":{"file":"Lease.pdf","page":4}' in user
+
+
+def test_shared_files_are_bounded(dragon):
+    page = {"name": "Big.pdf", "page": 1, "text": "x" * 8_000}
+    body = respond_body(documents=[dict(page, page=n) for n in range(1, 12)])  # 88,000 chars
+    with TestClient(dragon.app()) as client:
+        response = client.post(RESPOND, json=body, headers=dragon.headers())
+    assert _error_of(response) == (400, "invalid_request", False)

@@ -27,7 +27,7 @@ from utopia_homes_prime.inference.backend import Deadline, InferenceCall, Infere
 from utopia_homes_prime.inference.structured_output import OutputViolation, validate_instance
 
 ENDPOINT: Final = "https://openrouter.ai/api/v1/chat/completions"
-REQUEST_MAX_BYTES: Final = 262_144
+REQUEST_MAX_BYTES: Final = 786_432  # room for a meeting's shared files
 RESPONSE_MAX_BYTES: Final = 1_000_000
 MINIMUM_TIMEOUT_MS: Final = 1_000
 

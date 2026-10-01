@@ -133,7 +133,7 @@ async def test_no_time_left_is_a_deadline_before_any_request():
 
 async def test_oversized_requests_are_refused_locally():
     fake = FakeOpenRouter()
-    huge = (ExecutionMessage("system", "p"), ExecutionMessage("user", "x" * 300_000))
+    huge = (ExecutionMessage("system", "p"), ExecutionMessage("user", "x" * 800_000))
     with pytest.raises(InferenceFailure) as failure:
         await _infer(fake, _call(messages=huge))
     assert failure.value.category == "too_large"
