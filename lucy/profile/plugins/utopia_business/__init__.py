@@ -116,7 +116,8 @@ SEARCH_KNOWLEDGE_SCHEMA = {
     "name": "utopia_search_knowledge",
     "description": (
         "Search Utopia's knowledge items (everything beyond page facts: how things work, local "
-        "tips, internal notes, business decisions, and proposed items awaiting review)."
+        "tips, internal notes, business decisions, and proposed items awaiting review). The "
+        "query 'learned' finds what Lucy learned on her own from Ray's answers and finished work."
     ),
     "parameters": {
         "type": "object",

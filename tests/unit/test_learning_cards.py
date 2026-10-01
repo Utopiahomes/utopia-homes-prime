@@ -1,5 +1,5 @@
-"""Learning cards: when a host answers what Lucy could not, Lucy proposes lasting knowledge; it is
-only saved when a host says so, and lessons never get in a guest's way."""
+"""Learning: when a host answers what Lucy could not, or finishes work, Lucy learns lasting
+knowledge automatically (and, in the optional review mode, asks first with a learning card)."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ class Clock:
         return self.now
 
 
-def setup(proposals, now=AFTERNOON):
+def setup(proposals, now=AFTERNOON, review_by_card=True):
     seed = json.loads(
         (ROOT / "knowledge/business-seed/utopia-properties.seed.json").read_text(encoding="utf-8")
     )
@@ -51,7 +51,9 @@ def setup(proposals, now=AFTERNOON):
         seen.append(context)
         return proposals
 
-    learning = LearningDesk(MemoryLearningStore(), items, properties, propose, clock)
+    learning = LearningDesk(
+        MemoryLearningStore(), items, properties, propose, clock, review_by_card=review_by_card
+    )
     learning.learn_in_background = learning.learn  # type: ignore[method-assign]  # synchronous
     desk.learning = learning
     sent: list[str] = []
@@ -160,3 +162,30 @@ def test_finished_work_teaches_too():
     assert lesson.source_ref == f"work:{job.id}" and lesson.audience == "internal"
     desk.cards.tick()
     assert "From work you just finished" in sent[-1] and "hosts only" in sent[-1]
+
+
+def test_lucy_learns_automatically_without_asking():
+    desk, items, sent, clock, seen, _ = setup([POOL | {"audience": "public"}], review_by_card=False)
+    guest_card(desk)
+    desk.answer_card("revise", by="Ray", text="Hi! Yes, the pool is open through mid-October.")
+    desk.answer_card("send", by="Ray")
+    [learned] = items.search(property_slug="buttercup-beauty", query="learned")
+    assert learned.status == "active" and learned.last_confirmed is None
+    assert learned.audience == "booked_guest"  # never straight to the public website
+    count = len(sent)
+    desk.cards.tick()
+    assert len(sent) == count  # no card to answer
+    assert desk.learning.store.recent() == []
+
+
+def test_a_correction_updates_what_lucy_knew_instead_of_adding_a_second_fact():
+    fix = POOL | {"text": "The heated pool is open through October 15.", "replaces": "Pool season"}
+    desk, items, sent, clock, seen, _ = setup([fix], review_by_card=False)
+    old = items.create({"property_slug": "buttercup-beauty", "audience": "booked_guest",
+                        "kind": "fact", "topic": "pool", "title": "Pool season",
+                        "text": "The pool is open through September.", "status": "active"},
+                       created_by="test")  # fmt: skip
+    desk.learning.learn("guest-turn:gt-000000000009", "buttercup-beauty", "x")
+    assert items.get(old.id).text == "The heated pool is open through October 15."
+    assert len(items.search(property_slug="buttercup-beauty", statuses=("active",))) == 1
+    assert desk.learning.learn("guest-turn:gt-000000000009", "buttercup-beauty", "x") == []

@@ -113,7 +113,7 @@ def _matches(
     if statuses is not None and item.status not in statuses:
         return False
     if query:
-        haystack = f"{item.topic} {item.title} {item.text}".lower()
+        haystack = f"{item.topic} {item.title} {item.text} {item.source_note}".lower()
         return all(word in haystack for word in query.lower().split())
     return True
 

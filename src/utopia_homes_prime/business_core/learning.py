@@ -1,14 +1,19 @@
-"""Learning cards: Lucy proposes knowledge from what the hosts did; a host confirms it.
+"""Learning: Lucy learns from what the hosts did, automatically.
 
 Every time a host answers something Lucy could not (a guest card she handed over, or a reply the
 host rewrote) or finishes a piece of work, there may be something durable to learn: "the pool is
-open through mid-October", "the breaker for the pool pump is in the garage". Lucy proposes it; it
-is saved as a *proposed* knowledge item and shown to the hosts as a learning card, in the same
-Telegram queue as guest cards and answered the same way: "save", a change, or "skip". Only a host's
-"save" makes it active (and confirmed).
+open through mid-October", "the breaker for the pool pump is in the garage". Lucy saves it as
+active knowledge straight away (Ray's call, 2026-09-30: no confirmation step), marked as learned
+and unconfirmed, so she uses it next time. If it corrects something she already knew, she updates
+that item instead of adding a second one.
 
-Learning cards never compete with guests: they are sent only when no guest card is waiting, follow
-the 10 PM to 9 AM quiet hours, and are never repeated as reminders.
+Learned knowledge never reaches the public website on its own: anything the proposer marks public
+is saved for booked guests (whose replies a host still approves) until a host makes it public.
+Hosts see what she learned by asking her ("what have you learned lately?") and correct it the same
+way they correct any knowledge.
+
+An optional review mode (`review_by_card=True`) instead saves proposals as *proposed* and asks via
+a learning card in the Telegram queue ("save", a change, or "skip"); it is off by default.
 
 The proposer is a model call (OpenRouter, zero data retention). It is told to propose only lasting
 facts and policies, never one-off situations, guest details, codes, contact details, or prices;
@@ -156,6 +161,9 @@ Do NOT propose:
   emails, or prices.
 If there is nothing durable to learn, return an empty list. Most of the time that is right.
 
+If what the host said corrects or updates something the business already knows, set `replaces` to
+that item's exact title (as listed) and write the corrected text; otherwise set it to "".
+
 audience: public (anyone may know it), booked_guest (only guests with a booking, e.g. how things
 work in the house), internal (hosts only, e.g. where the breaker is, which vendor to call)."""
 
@@ -173,8 +181,9 @@ PROPOSER_SCHEMA = {
                     "title": {"type": "string"},
                     "text": {"type": "string"},
                     "why": {"type": "string"},
+                    "replaces": {"type": "string"},
                 },
-                "required": ["audience", "kind", "topic", "title", "text", "why"],
+                "required": ["audience", "kind", "topic", "title", "text", "why", "replaces"],
                 "additionalProperties": False,
             },
         }
@@ -233,7 +242,10 @@ class LearningDesk:
         properties: PropertyStore,
         propose: Proposer,
         clock: Callable[[], datetime] = _now,
+        *,
+        review_by_card: bool = False,
     ) -> None:
+        self.review_by_card = review_by_card
         self.store = store
         self._items = items
         self._properties = properties
@@ -254,46 +266,94 @@ class LearningDesk:
         except Exception:  # learning is a bonus; it must never break the flow that triggered it
             _log.warning("learning from %s failed", source_ref, exc_info=True)
 
-    def learn(self, source_ref: str, property_slug: str | None, about: str) -> list[LearningCard]:
-        if any(c.source_ref == source_ref for c in self.store.recent(300)):
+    def learn(self, source_ref: str, property_slug: str | None, about: str) -> list[Any]:
+        """Learn from one thing the hosts did. Returns the knowledge items written (or, in review
+        mode, the learning cards created)."""
+        known = self._items.search(property_slug=property_slug, statuses=("active", "proposed"),
+                                   limit=500)  # fmt: skip
+        if any(source_ref in i.evidence_ids for i in known) or any(
+            c.source_ref == source_ref for c in self.store.recent(300)
+        ):
             return []  # already learned from this (e.g. an answer that was undone and re-sent)
         home = self._properties.get(property_slug).name if property_slug else "Utopia Homes"
-        known = self._items.search(property_slug=property_slug, statuses=("active", "proposed"),
-                                   limit=200)  # fmt: skip
         known_text = "\n".join(f"- {i.title}: {i.text}" for i in known) or "(nothing yet)"
         context = f"Home: {home}\n\n{about}\n\nWhat the business already knows:\n{known_text}"
-        cards = []
+        by_title = {i.title.strip().lower(): i for i in known if i.status == "active"}
+        written: list[Any] = []
         for proposal in self._propose(context)[:MAX_PROPOSALS]:
             text = scrub(str(proposal.get("text") or "")).strip()
             title = str(proposal.get("title") or "").strip()[:160]
             if not text or not title or leaks(text) or "[" in text or len(text) > 1500:
                 continue
-            item = self._items.create(
+            why = f"learned from {source_ref}: {proposal.get('why', '')}"[:500]
+            if self.review_by_card:
+                written.append(self._card_for(proposal, title, text, why, source_ref,
+                                              property_slug, about))  # fmt: skip
+                continue
+            target = by_title.get(str(proposal.get("replaces") or "").strip().lower())
+            if target is not None:
+                written.append(self._items.update(
+                    target.id,
+                    {"text": text, "evidence_ids": [*target.evidence_ids, source_ref][-50:],
+                     "source_note": f"updated by Lucy: {why}"[:500], "relation": "confirms"},
+                    changed_by="Lucy (learned automatically)", confirm=False,
+                ))  # fmt: skip
+                continue
+            audience = proposal.get("audience", "booked_guest")
+            written.append(self._items.create(
                 {
                     "property_slug": property_slug,
-                    "audience": proposal.get("audience", "booked_guest"),
+                    # Learned knowledge never reaches the public website on its own.
+                    "audience": "booked_guest" if audience == "public" else audience,
                     "kind": proposal.get("kind", "fact"),
                     "topic": str(proposal.get("topic") or "general")[:60],
                     "title": title,
                     "text": text,
-                    "status": "proposed",
+                    "status": "active",
+                    "confidence": 0.7,
                     "evidence_ids": [source_ref],
-                    "source_note": f"learned from {source_ref}: {proposal.get('why', '')}"[:500],
+                    "source_note": why,
                     "relation": "new",
                 },
-                created_by="Lucy (learning)",
-            )
-            now = self._clock()
-            card = LearningCard(
-                id="lc-" + uuid.uuid4().hex[:12], item_id=item.id, property_slug=property_slug,
-                source_ref=source_ref, source_summary=about[:1200], audience=item.audience,
-                title=title, versions=[text], created_at=now, updated_at=now,
-            )  # fmt: skip
-            self.store.put(card)
-            cards.append(card)
-        if cards and self.on_new_card is not None:
+                created_by="Lucy (learned automatically)",
+            ))  # fmt: skip
+        if written and self.review_by_card and self.on_new_card is not None:
             self.on_new_card()
-        return cards
+        return written
+
+    def _card_for(
+        self,
+        proposal: dict[str, Any],
+        title: str,
+        text: str,
+        why: str,
+        source_ref: str,
+        property_slug: str | None,
+        about: str,
+    ) -> LearningCard:
+        item = self._items.create(
+            {
+                "property_slug": property_slug,
+                "audience": proposal.get("audience", "booked_guest"),
+                "kind": proposal.get("kind", "fact"),
+                "topic": str(proposal.get("topic") or "general")[:60],
+                "title": title,
+                "text": text,
+                "status": "proposed",
+                "evidence_ids": [source_ref],
+                "source_note": why,
+                "relation": "new",
+            },
+            created_by="Lucy (learning)",
+        )
+        now = self._clock()
+        card = LearningCard(
+            id="lc-" + uuid.uuid4().hex[:12], item_id=item.id, property_slug=property_slug,
+            source_ref=source_ref, source_summary=about[:1200], audience=item.audience,
+            title=title, versions=[text], created_at=now, updated_at=now,
+        )  # fmt: skip
+        self.store.put(card)
+        return card
 
     # Host answers ----------------------------------------------------------------------------
 
