@@ -149,12 +149,16 @@ def reply(
     reason: str | None = None,
     kind: str = "utopia",
     search_query: str = "",
+    show_file: str | None = None,
+    show_page: int | None = None,
 ) -> dict[str, Any]:
     return {
         "kind": kind,
         "outcome": outcome,
         "answer": answer,
         "search_query": search_query,
+        "show_file": show_file,
+        "show_page": show_page,
         "display_material": display,
         "decline_reason": reason,
     }

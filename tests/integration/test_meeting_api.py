@@ -630,3 +630,20 @@ def test_shared_files_are_bounded(dragon):
     with TestClient(dragon.app()) as client:
         response = client.post(RESPOND, json=body, headers=dragon.headers())
     assert _error_of(response) == (400, "invalid_request", False)
+
+
+def test_lucy_can_put_a_shared_files_page_on_screen(dragon):
+    body = respond_body("Can you pull up the deposit page?", documents=LEASE_PAGES)
+    result = _answer(
+        dragon,
+        reply(
+            "Sure, I've pulled up page 4 of the lease.",
+            display=None,
+            show_file="Lease.pdf",
+            show_page=4,
+        ),
+        body=body,
+    )
+    assert result["outcome"] == "answered"
+    assert result["show_document"] == {"name": "Lease.pdf", "page": 4}
+    assert "display_material" not in result
