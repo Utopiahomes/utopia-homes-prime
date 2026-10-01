@@ -290,9 +290,10 @@ CARD_ON_SCREEN_SCHEMA = {
 ANSWER_CARD_SCHEMA = {
     "name": "utopia_answer_guest_card",
     "description": (
-        "Record Ray's answer to a guest card. It applies to the card on screen (the latest one "
-        "sent) unless Ray replied to a specific card: then pass that card's turn_id and version "
-        "from the [gt-... vN] line he replied to. send: approve the wording shown. revise: the "
+        "Record Ray's answer to a guest card or a 📚 learning card (send = save it). It "
+        "applies to the card on screen (the latest one sent) unless Ray replied to a specific "
+        "card: then pass that card's id and version from the [gt-... vN] or [lc-... vN] line. "
+        "send: approve the wording shown. revise: the "
         "new wording (Ray's exact words, or your rewrite of his instruction); the card is sent "
         "back to him and only his 'send' finalizes it. reject. undo: reopen the last answered "
         "card."
@@ -302,7 +303,7 @@ ANSWER_CARD_SCHEMA = {
         "properties": {
             "action": {"type": "string", "enum": ["send", "revise", "reject", "undo"]},
             "text": {"type": "string", "maxLength": 2000},
-            "turn_id": _TURN_ID,
+            "turn_id": {"type": "string", "pattern": "^(gt|lc)-[a-z0-9]{12}$"},
             "version": {"type": "integer", "minimum": 1},
             "categories": {
                 "type": "array",

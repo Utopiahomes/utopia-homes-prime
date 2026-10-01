@@ -24,6 +24,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from utopia_homes_prime.business_core.guest import GuestDesk, GuestError, GuestTurn, NotFound
+from utopia_homes_prime.business_core.learning import LearningCard, LearningNotFound
 from utopia_homes_prime.business_core.store import PropertyNotFound
 from utopia_homes_prime.business_core.work import InvalidWork
 
@@ -143,7 +144,7 @@ class CardAnswer(BaseModel):
     action: str = Field(pattern=r"^(send|revise|reject|undo)$")
     by: str = Field(min_length=1, max_length=120)
     text: str | None = Field(default=None, max_length=2000)
-    turn_id: str | None = Field(default=None, pattern=r"^gt-[a-z0-9]{12}$")
+    turn_id: str | None = Field(default=None, pattern=r"^(gt|lc)-[a-z0-9]{12}$")
     """Only when the host replied to a specific card; otherwise the card on screen."""
     version: int | None = Field(default=None, ge=1)
     categories: list[str] = Field(default_factory=list, max_length=10)
@@ -198,7 +199,7 @@ def _turn_summary(t: GuestTurn) -> dict[str, Any]:
 async def _run(fn: Any) -> JSONResponse | Any:
     try:
         return await run_in_threadpool(fn)
-    except (NotFound, PropertyNotFound) as exc:
+    except (NotFound, PropertyNotFound, LearningNotFound) as exc:
         return _error(404, "not_found", str(exc))
     except (GuestError, InvalidWork) as exc:
         return _error(422, "invalid_request", str(exc))
@@ -264,7 +265,16 @@ def register_guest_routes(
     async def card_on_screen() -> JSONResponse:
         """The guest card the hosts see last in their chat, if it still needs an answer."""
         current = await run_in_threadpool(desk.on_screen)
-        return JSONResponse({"card": _turn_summary(current) if current else None})
+        if isinstance(current, LearningCard):
+            return JSONResponse({"card": {
+                "kind": "learning", "id": current.id, "property_slug": current.property_slug,
+                "version": len(current.versions), "proposed_knowledge": current.versions[-1],
+                "title": current.title, "audience": current.audience,
+                "learned_from": current.source_summary,
+            }})  # fmt: skip
+        return JSONResponse(
+            {"card": _turn_summary(current) | {"kind": "guest"} if current else None}
+        )
 
     @app.post("/internal/v1/guest/card")
     async def answer_card(body: CardAnswer) -> JSONResponse:

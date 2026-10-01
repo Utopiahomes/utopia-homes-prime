@@ -1,6 +1,7 @@
 """Host cards: how guest messages that need Ray or Meghan reach them on Telegram, one at a time.
 
-A *card* is one guest message that needs a person, shown with Lucy's proposed reply. The rules:
+A *card* is one guest message that needs a person, shown with Lucy's proposed reply, or a
+learning card (business_core/learning.py) asking to save something Lucy learned. The rules:
 
 - **One card on screen.** The latest card sent is the one on screen, and a plain reply ("send",
   "tell them yes") applies to it. The code decides which card an answer is for, never the model;
@@ -24,7 +25,7 @@ import re
 import threading
 from collections.abc import Callable, Iterable
 from datetime import UTC, date, datetime, timedelta
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from utopia_homes_prime.business_core.guest import GuestDesk, GuestTurn, Reservation
@@ -178,21 +179,41 @@ class CardDispatcher:
 
         threading.Thread(target=loop, daemon=True, name="host-cards").start()
 
-    def tick(self) -> GuestTurn | None:
+    def tick(self) -> Any:
+        """Guest cards first (urgent cutting in); learning cards only when no guest card waits;
+        quiet hours for everything but urgent; reminders for guest cards only."""
         with self._lock:
             now = self._clock()
             recent = self._desk.store.turns(None, limit=300)
             waiting = order(t for t in recent if t.state in OPEN_STATES)
-            if not waiting:
+            learning = self._desk.learning
+            lessons = learning.store.recent(200) if learning is not None else []
+            open_lessons = sorted((c for c in lessons if c.state == "open"),
+                                  key=lambda c: c.created_at)  # fmt: skip
+            shown: list[Any] = [t for t in recent if t.card_sent_at]
+            shown += [c for c in lessons if c.card_sent_at]
+            on_screen = max(shown, key=lambda c: c.card_seq) if shown else None
+            screen_open = on_screen is not None and (
+                on_screen.state in OPEN_STATES
+                if on_screen.id.startswith("gt-")
+                else on_screen.state == "open"
+            )
+            allowed = [t for t in waiting if t.priority == "urgent" or not quiet(now)]
+            if not screen_open:
+                if allowed:
+                    return self.send_card(allowed[0], waiting, now)
+                if open_lessons and not waiting and not quiet(now):
+                    return self.send_card(open_lessons[0], waiting, now)
                 return None
-            shown = [t for t in recent if t.card_sent_at is not None]
-            on_screen = max(shown, key=lambda t: t.card_seq) if shown else None
-            if on_screen is None or on_screen.state not in OPEN_STATES:
-                allowed = [t for t in waiting if t.priority == "urgent" or not quiet(now)]
-                return self.send_card(allowed[0], waiting, now) if allowed else None
+            assert on_screen is not None
             engaged = (
                 on_screen.host_active_at is not None and now - on_screen.host_active_at < ENGAGED
             )
+            if on_screen.id.startswith("lc-"):
+                # A waiting guest always outranks a lesson (once the host pauses).
+                if allowed and not engaged:
+                    return self.send_card(allowed[0], waiting, now)
+                return None
             if on_screen.priority != "urgent" and not engaged:
                 unseen_urgent = [
                     t for t in waiting if t.priority == "urgent" and t.id != on_screen.id
@@ -206,14 +227,22 @@ class CardDispatcher:
 
     def send_card(
         self,
-        turn: GuestTurn,
+        card: Any,
         waiting: list[GuestTurn] | None = None,
         now: datetime | None = None,
         problem: str = "",
-    ) -> GuestTurn:
+    ) -> Any:
         now = now or self._clock()
+        seq = self._desk.next_card_seq()
+        if card.id.startswith("lc-"):
+            from utopia_homes_prime.business_core.learning import learning_card_text
+
+            home = self._desk.home_name(card.property_slug) if card.property_slug else "Utopia"
+            self._send(learning_card_text(card, home))
+            assert self._desk.learning is not None
+            return self._desk.learning.mark_card_sent(card.id, now, seq)
         if waiting is None:
             waiting = order(t for t in self._desk.store.turns(OPEN_STATES, 300))
-        home = self._desk.home_name(turn.property_slug)
-        self._send(card_text(turn, home, waiting or [turn], problem))
-        return self._desk.mark_card_sent(turn.id, now)
+        home = self._desk.home_name(card.property_slug)
+        self._send(card_text(card, home, waiting or [card], problem))
+        return self._desk.mark_card_sent(card.id, now, seq)

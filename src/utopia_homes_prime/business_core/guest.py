@@ -34,6 +34,7 @@ from utopia_homes_prime.business_core.host_cards import (
     priority_for,
 )
 from utopia_homes_prime.business_core.knowledge_items import KnowledgeItemStore
+from utopia_homes_prime.business_core.learning import LearningCard, LearningDesk
 from utopia_homes_prime.business_core.scrub import scrub
 from utopia_homes_prime.business_core.store import PropertyStore
 from utopia_homes_prime.business_core.work import WorkDesk, WorkItem
@@ -276,6 +277,7 @@ class GuestDesk:
     ) -> None:
         self._clock = clock
         self.cards: CardDispatcher | None = None
+        self.learning: LearningDesk | None = None
         self.store = store
         self._properties = properties
         self._items = items
@@ -328,13 +330,26 @@ class GuestDesk:
         )
         return self.store.turn(turn_id)
 
-    def on_screen(self) -> GuestTurn | None:
-        """The card the hosts see last in their chat, if it still needs an answer."""
-        shown = [t for t in self.store.turns(None, limit=300) if t.card_sent_at is not None]
+    def on_screen(self) -> GuestTurn | LearningCard | None:
+        """The card the hosts see last in their chat (a guest card or a learning card), if it
+        still needs an answer."""
+        shown: list[GuestTurn | LearningCard] = [
+            t for t in self.store.turns(None, limit=300) if t.card_sent_at is not None
+        ]
+        if self.learning is not None:
+            shown += [c for c in self.learning.store.recent(200) if c.card_sent_at is not None]
         if not shown:
             return None
-        latest = max(shown, key=lambda t: t.card_seq)
+        latest = max(shown, key=lambda c: c.card_seq)
+        if isinstance(latest, LearningCard):
+            return latest if latest.state == "open" else None
         return latest if latest.state in OPEN_STATES else None
+
+    def next_card_seq(self) -> int:
+        seqs = [t.card_seq for t in self.store.turns(None, limit=300)]
+        if self.learning is not None:
+            seqs += [c.card_seq for c in self.learning.store.recent(200)]
+        return max(seqs, default=0) + 1
 
     def answer_card(
         self,
@@ -353,12 +368,18 @@ class GuestDesk:
         now = self._clock()
         if action == "undo":
             return self._undo(by, now)
+        if turn_id and turn_id.startswith("lc-"):
+            if self.learning is None:
+                raise GuestError("learning is not enabled")
+            return self._answer_lesson(self.learning.store.get(turn_id), action, by, text, version)
         if turn_id:
             turn = self.store.turn(turn_id)
         else:
             current = self.on_screen()
             if current is None:
-                raise GuestError("no guest card is waiting for an answer")
+                raise GuestError("no card is waiting for an answer")
+            if isinstance(current, LearningCard):
+                return self._answer_lesson(current, action, by, text, version)
             turn = current
         if turn.state not in OPEN_STATES:
             raise GuestError(f"that guest message is already {turn.state}")
@@ -376,7 +397,8 @@ class GuestDesk:
             decision = Decision(action="approve", decided_by=by, final_text=latest.text,
                                 edited=latest.author == "host", edit_categories=categories or [],
                                 reason=reason, at=now)  # fmt: skip
-            self._save(turn, state="approved", decision=decision, host_active_at=None)
+            done = self._save(turn, state="approved", decision=decision, host_active_at=None)
+            self._learn_from(done)
             return {"status": "approved", "turn_id": turn.id, "reply": latest.text,
                     "sending": "not connected yet: approved replies are recorded"}  # fmt: skip
         if action == "reject":
@@ -397,6 +419,43 @@ class GuestDesk:
                     "gate": record.decision, "notes": [f["detail"] for f in record.findings],
                     "next": "the updated card was sent; send finalizes it"}  # fmt: skip
         raise GuestError("action must be send, revise, reject, or undo")
+
+    def _answer_lesson(
+        self, card: LearningCard, action: str, by: str, text: str | None, version: int | None
+    ) -> dict[str, Any]:
+        assert self.learning is not None
+        try:
+            result = self.learning.answer(card, action, by=by, text=text, version=version)
+        except ValueError as exc:
+            raise GuestError(str(exc)) from None
+        if self.cards is not None:
+            if result["status"] == "revised":
+                self.cards.send_card(self.learning.store.get(card.id))
+            else:
+                self.cards.poke(delay=ANSWER_PAUSE_SECONDS)
+        return result
+
+    def _learn_from(self, turn: GuestTurn) -> None:
+        """A host answered something Lucy could not, or rewrote her reply: maybe there is
+        something durable to learn. Runs in the background; never blocks the answer."""
+        if self.learning is None or turn.decision is None:
+            return
+        if not (turn.decision.edited or turn.escalation):
+            return
+        first = next((a.text for a in turn.attempts if a.author == "lucy"), "")
+        about = "\n".join(
+            line
+            for line in (
+                f"Guest asked: {turn.guest_message}",
+                f"Lucy's draft: {first}" if first else "",
+                f"Lucy handed it to the hosts because: {turn.escalation['reason']}"
+                if turn.escalation
+                else "",
+                f"The host sent: {turn.decision.final_text}",
+            )
+            if line
+        )
+        self.learning.learn_in_background(f"guest-turn:{turn.id}", turn.property_slug, about)
 
     def _undo(self, by: str, now: datetime) -> dict[str, Any]:
         decided = [t for t in self.store.turns(("approved", "rejected"), 50) if t.decision]
@@ -424,8 +483,8 @@ class GuestDesk:
     def home_name(self, slug: str) -> str:
         return self._properties.get(slug).name
 
-    def mark_card_sent(self, turn_id: str, now: datetime) -> GuestTurn:
-        seq = max((t.card_seq for t in self.store.turns(None, limit=300)), default=0) + 1
+    def mark_card_sent(self, turn_id: str, now: datetime, seq: int | None = None) -> GuestTurn:
+        seq = seq if seq is not None else self.next_card_seq()
         turn = self.store.turn(turn_id)
         updated = turn.model_copy(update={"card_sent_at": now, "card_seq": seq})
         self.store.put_turn(updated)

@@ -463,6 +463,8 @@ class BusinessCoreConfig:
     notify_bot_token: str | None = None
     """Utopia Lucy's Telegram bot token, used only to send host notifications."""
     notify_chat_id: str | None = None
+    learning_model: str = "openai/gpt-6-luna"
+    """The model that proposes knowledge from what the hosts did (OpenRouter, zero retention)."""
 
     @classmethod
     def from_environment(cls, env: Mapping[str, str]) -> BusinessCoreConfig | None:
@@ -493,6 +495,7 @@ class BusinessCoreConfig:
             support_phone=(env.get("UTOPIA_SUPPORT_PHONE") or "").strip() or None,
             notify_bot_token=(env.get("UTOPIA_NOTIFY_TELEGRAM_BOT_TOKEN") or "").strip() or None,
             notify_chat_id=(env.get("UTOPIA_NOTIFY_TELEGRAM_CHAT_ID") or "").strip() or None,
+            learning_model=(env.get("UTOPIA_LEARNING_MODEL") or "").strip() or "openai/gpt-6-luna",
         )
 
 

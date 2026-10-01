@@ -165,5 +165,5 @@ def test_undo_reopens_the_last_answer_and_resends_its_card():
 
 def test_no_card_on_screen_means_nothing_to_answer():
     desk, sent, clock = setup()
-    with pytest.raises(GuestError, match="no guest card"):
+    with pytest.raises(GuestError, match="no card is waiting"):
         desk.answer_card("send", by="Ray")

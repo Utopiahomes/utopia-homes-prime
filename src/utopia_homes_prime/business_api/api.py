@@ -53,6 +53,13 @@ from utopia_homes_prime.business_core.knowledge_items import (
     KnowledgeItemStore,
     PostgresKnowledgeItemStore,
 )
+from utopia_homes_prime.business_core.learning import (
+    LearningDesk,
+    MemoryLearningStore,
+    PostgresLearningStore,
+    Proposer,
+    openrouter_proposer,
+)
 from utopia_homes_prime.business_core.records import PropertyRecord
 from utopia_homes_prime.business_core.routes import register_business_routes
 from utopia_homes_prime.business_core.store import PostgresPropertyStore, PropertyStore
@@ -60,6 +67,7 @@ from utopia_homes_prime.business_core.work import (
     MemoryWorkStore,
     PostgresWorkStore,
     WorkDesk,
+    WorkItem,
     WorkStore,
 )
 from utopia_homes_prime.config import (
@@ -414,6 +422,7 @@ def create_app(
     knowledge_store: KnowledgeItemStore | None = None,
     work_store: WorkStore | None = None,
     guest_store: GuestStore | None = None,
+    learning_proposer: Proposer | None = None,
 ) -> FastAPI:
     """`execution_transport` exists only so tests can route the selected inference backend
     client to an in-process fake; runtime wiring always uses the default network transport.
@@ -589,9 +598,42 @@ def create_app(
             or ("www.utopiahomes.com",),
             support_phone=business.support_phone,
         )
+        proposer = learning_proposer
+        if proposer is None and config.homes_prime is not None and config.homes_prime.direct:
+            proposer = openrouter_proposer(
+                config.homes_prime.direct.api_key, business.learning_model
+            )
+        if proposer is not None:
+            learning = LearningDesk(
+                MemoryLearningStore()
+                if business_store is not None
+                else PostgresLearningStore(business.database_url),
+                items,
+                store,
+                proposer,
+            )
+            guest_desk.learning = learning
+
+            def learn_from_work(item: WorkItem) -> None:
+                notes = "; ".join(n.text for n in item.notes)
+                about = "\n".join(
+                    line
+                    for line in (
+                        f"Work finished: {item.title}",
+                        f"What was needed: {item.purpose}",
+                        f"Notes along the way: {notes}" if notes else "",
+                        f"Result: {item.result}" if item.result else "",
+                    )
+                    if line
+                )
+                learning.learn_in_background(f"work:{item.id}", item.property_slug, about)
+
+            desk.on_done = learn_from_work
         if notifier is not None:
             guest_desk.cards = CardDispatcher(guest_desk, notifier)
             guest_desk.cards.start()
+            if guest_desk.learning is not None:
+                guest_desk.learning.on_new_card = guest_desk.cards.poke
 
         def wake_failed(turn_id: str) -> None:
             guest_desk.notify_hosts(

@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import threading
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Literal, Protocol
 
@@ -299,6 +300,8 @@ class WorkDesk:
     def __init__(self, store: WorkStore, providers: list[ExecutionProvider] | None = None) -> None:
         self.store = store
         self._providers = {p.name: p for p in (providers or [ManualExecution()])}
+        self.on_done: Callable[[WorkItem], None] | None = None
+        """Called when work is finished, e.g. so Lucy can propose what it taught us."""
 
     def _provider(self, name: str) -> ExecutionProvider:
         try:
@@ -323,6 +326,8 @@ class WorkDesk:
             item = self._hand_off(item, changed_by)
         elif item.status == "cancelled" and before.status != "cancelled":
             self._provider(item.assigned_executor).cancel(item)
+        if item.status == "done" and before.status != "done" and self.on_done is not None:
+            self.on_done(item)
         return item
 
     def _hand_off(self, item: WorkItem, by: str) -> WorkItem:
