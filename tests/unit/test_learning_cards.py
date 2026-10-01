@@ -171,7 +171,7 @@ def test_lucy_learns_automatically_without_asking():
     desk.answer_card("send", by="Ray")
     [learned] = items.search(property_slug="buttercup-beauty", query="learned")
     assert learned.status == "active" and learned.last_confirmed is None
-    assert learned.audience == "booked_guest"  # never straight to the public website
+    assert learned.audience == "public"  # the website learns too
     count = len(sent)
     desk.cards.tick()
     assert len(sent) == count  # no card to answer

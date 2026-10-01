@@ -7,10 +7,10 @@ active knowledge straight away (Ray's call, 2026-09-30: no confirmation step), m
 and unconfirmed, so she uses it next time. If it corrects something she already knew, she updates
 that item instead of adding a second one.
 
-Learned knowledge never reaches the public website on its own: anything the proposer marks public
-is saved for booked guests (whose replies a host still approves) until a host makes it public.
-Hosts see what she learned by asking her ("what have you learned lately?") and correct it the same
-way they correct any knowledge.
+Public facts she learns reach the website chat too (within its refresh window, about 15 s): Ray
+would rather the website learn and occasionally be slightly off than never learn. Guest-only and
+internal details keep their audience. Hosts see what she learned by asking her ("what have you
+learned lately?") and correct it the same way they correct any knowledge.
 
 An optional review mode (`review_by_card=True`) instead saves proposals as *proposed* and asks via
 a learning card in the Telegram queue ("save", a change, or "skip"); it is off by default.
@@ -299,12 +299,10 @@ class LearningDesk:
                     changed_by="Lucy (learned automatically)", confirm=False,
                 ))  # fmt: skip
                 continue
-            audience = proposal.get("audience", "booked_guest")
             written.append(self._items.create(
                 {
                     "property_slug": property_slug,
-                    # Learned knowledge never reaches the public website on its own.
-                    "audience": "booked_guest" if audience == "public" else audience,
+                    "audience": proposal.get("audience", "booked_guest"),
                     "kind": proposal.get("kind", "fact"),
                     "topic": str(proposal.get("topic") or "general")[:60],
                     "title": title,
