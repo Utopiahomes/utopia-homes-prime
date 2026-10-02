@@ -151,6 +151,8 @@ def reply(
     search_query: str = "",
     show_file: str | None = None,
     show_page: int | None = None,
+    action_item: str = "",
+    action_context: str = "",
 ) -> dict[str, Any]:
     return {
         "kind": kind,
@@ -161,6 +163,8 @@ def reply(
         "show_page": show_page,
         "display_material": display,
         "decline_reason": reason,
+        "action_item": action_item,
+        "action_context": action_context,
     }
 
 

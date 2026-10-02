@@ -651,6 +651,29 @@ def test_lucy_can_put_a_shared_files_page_on_screen(dragon):
     assert "display_material" not in result
 
 
+def test_lucy_proposes_work_outside_the_meeting_as_an_action_item(dragon):
+    body = respond_body("Lucy, can someone send Linda the onboarding checklist?")
+    result = _answer(
+        dragon,
+        reply(
+            "I've proposed that as an action item for someone to assign.",
+            display=None,
+            action_item="Send Linda   the onboarding checklist",
+            action_context="Linda is onboarding her home in March and asked for the checklist.",
+        ),
+        body=body,
+    )
+    assert result["outcome"] == "answered"
+    assert result["propose_action"] == {
+        "description": "Send Linda the onboarding checklist",
+        "context": "Linda is onboarding her home in March and asked for the checklist.",
+    }
+    system = _messages(dragon)[0]["content"]
+    assert "action_item" in system and "Nothing runs until a person assigns it" in system
+    # An ordinary answer proposes nothing.
+    assert "propose_action" not in _answer(dragon, reply(display=None))
+
+
 # --- access levels -------------------------------------------------------------------------------
 
 RAY = "ray@utopiahomes.com"
