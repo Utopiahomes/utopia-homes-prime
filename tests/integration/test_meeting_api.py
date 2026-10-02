@@ -29,6 +29,8 @@ from fixtures.meeting import (
 )
 
 from utopia_homes_prime.business_api.api import create_app
+from utopia_homes_prime.business_core.knowledge_items import MemoryKnowledgeItemStore
+from utopia_homes_prime.business_core.store import MemoryPropertyStore
 from utopia_homes_prime.config import Config, ConfigError
 from utopia_homes_prime.meeting_assist.meeting_materials import MaterialsUnavailable
 
@@ -647,3 +649,163 @@ def test_lucy_can_put_a_shared_files_page_on_screen(dragon):
     assert result["outcome"] == "answered"
     assert result["show_document"] == {"name": "Lease.pdf", "page": 4}
     assert "display_material" not in result
+
+
+# --- access levels -------------------------------------------------------------------------------
+
+RAY = "ray@utopiahomes.com"
+INTERNAL_FACT = "The Shamrock keeps an owner payout reserve of 4,316 dollars."
+
+
+def _business_app(tmp_path, *, meeting: dict[str, str] | None = None):
+    """A meeting harness whose app has the business core, with one internal knowledge item."""
+    levels = json.dumps({" Ray@UtopiaHomes.com ": "admin"})
+    dragon = build_meeting_harness(
+        tmp_path,
+        meeting={"GUEST_ANSWER_PROVIDER_MEETING_ACCESS_LEVELS": levels, **(meeting or {})},
+    )
+    dragon.prime.env.update(
+        {
+            "UTOPIA_BUSINESS_DATABASE_URL": "postgresql://unused",
+            "UTOPIA_BUSINESS_LUCY_TOKEN": "t" * 40,
+        }
+    )
+    config = Config.from_environment(dragon.prime.env)
+    items = MemoryKnowledgeItemStore()
+    for audience, text in (
+        ("internal", INTERNAL_FACT),
+        ("public", "Public item text."),
+    ):
+        items.create(
+            {"property_slug": "the-shamrock", "audience": audience, "kind": "fact",
+             "topic": "payouts", "title": "Owner payout day", "text": text, "status": "active"},
+            created_by="test",
+        )  # fmt: skip
+    app = create_app(
+        config=config,
+        execution_transport=dragon.fake.transport(),
+        business_store=MemoryPropertyStore(),
+        knowledge_store=items,
+    )
+    return dragon, app
+
+
+def _audience(mode: str, *people: tuple[str, bool]) -> dict:
+    return {"mode": mode, "people": [{"email": e, "is_host": h} for e, h in people]}
+
+
+@pytest.mark.parametrize(
+    ("audience", "admin"),
+    [
+        (_audience("host", (RAY, True), ("guest@example.com", False)), True),
+        (_audience("lowest", (RAY, True), ("guest@example.com", False)), False),
+        (_audience("highest", (RAY, False), ("guest@example.com", True)), True),
+        (_audience("host", (RAY, False), ("guest@example.com", True)), False),
+        (None, False),
+    ],
+)
+def test_admin_meetings_get_internal_knowledge(tmp_path, caplog, audience, admin):
+    dragon, app = _business_app(tmp_path)
+    dragon.fake.script(
+        MEETING_PROFILE,
+        success(reply("The Shamrock's payout reserve is 4,316 dollars.", display=None)),
+        success(reply("I don't have that; let's note it as an open question.", display=None)),
+    )
+    extra = {"audience": audience} if audience is not None else {}
+    body = respond_body("What is the Shamrock owner payout reserve?", **extra)
+    with caplog.at_level(logging.INFO), TestClient(app) as client:
+        response = client.post(RESPOND, json=body, headers=dragon.headers())
+    assert response.status_code == 200, response.text
+    system = dragon.fake.attempts[0].document["messages"][0]["content"]
+    assert ("INTERNAL_KNOWLEDGE=" in system) is admin
+    assert (INTERNAL_FACT in system) is admin
+    assert ("verified access level for this meeting is\nadmin" in system) is admin
+    if admin:  # only internal and guest-only items; public ones reach PUBLIC_CONTEXT instead
+        assert "Public item text." not in system.split("INTERNAL_KNOWLEDGE=")[1]
+    result = response.json()
+    if admin:
+        # The internal number is a supported source, so the first answer stands.
+        assert result["answer"] == "The Shamrock's payout reserve is 4,316 dollars."
+        assert len(dragon.fake.attempts) == 1
+        assert "access=admin" in caplog.text
+    else:
+        # At public level the internal number has no source: Homes retries and she says so.
+        assert result["answer"].startswith("I don't have that")
+        assert "access=public" in caplog.text
+    assert RAY not in caplog.text.lower() and INTERNAL_FACT not in caplog.text
+
+
+class _BrokenItems(MemoryKnowledgeItemStore):
+    def search(self, **kwargs):
+        raise RuntimeError("database is down")
+
+
+def test_a_failing_item_store_answers_at_public_level(tmp_path, caplog):
+    dragon, _ = _business_app(tmp_path)
+    app = create_app(
+        config=Config.from_environment(dragon.prime.env),
+        execution_transport=dragon.fake.transport(),
+        business_store=MemoryPropertyStore(),
+        knowledge_store=_BrokenItems(),
+    )
+    dragon.fake.script(MEETING_PROFILE, success(reply()))
+    body = respond_body(audience=_audience("host", (RAY, True)))
+    with caplog.at_level(logging.INFO), TestClient(app) as client:
+        response = client.post(RESPOND, json=body, headers=dragon.headers())
+    assert response.status_code == 200 and response.json()["outcome"] == "answered"
+    system = dragon.fake.attempts[0].document["messages"][0]["content"]
+    assert "INTERNAL_KNOWLEDGE=" not in system and "access=public" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "audience",
+    [
+        {"mode": "everyone", "people": []},
+        {"mode": "host"},
+        {"mode": "host", "people": [{"email": RAY}]},
+        {"mode": "host", "people": [{"email": RAY, "is_host": "true"}]},
+        {"mode": "host", "people": [{"email": "x", "is_host": True}]},
+        {"mode": "host", "people": [{"email": RAY, "is_host": True, "role": "admin"}]},
+        {"mode": "host", "people": [], "level": "admin"},
+        {"mode": "host", "people": [{"email": "a@b.co", "is_host": False}] * 101},
+        "admin",
+    ],
+)
+def test_invalid_audience_is_an_invalid_request(dragon, audience):
+    with TestClient(dragon.app()) as client:
+        response = client.post(
+            RESPOND, json=respond_body(audience=audience), headers=dragon.headers()
+        )
+    assert _error_of(response) == (400, "invalid_request", False)
+    assert dragon.fake.attempts == []
+
+
+@pytest.mark.parametrize(
+    ("value", "match"),
+    [
+        ("{not json", "not valid JSON"),
+        ('["ray@utopiahomes.com"]', "JSON object"),
+        ('{"ray@utopiahomes.com": "owner"}', "levels must be one of"),
+        ('{"ray@utopiahomes.com": 1}', "levels must be one of"),
+        ('{"ray": "admin"}', "email addresses"),
+    ],
+)
+def test_meeting_access_levels_config_fails_closed(tmp_path, value, match):
+    prime, _ = build_meeting_env(
+        tmp_path, meeting={"GUEST_ANSWER_PROVIDER_MEETING_ACCESS_LEVELS": value}
+    )
+    with pytest.raises(ConfigError, match=match):
+        Config.from_environment(prime.env)
+
+
+def test_meeting_access_levels_config_is_normalized_and_optional(tmp_path):
+    unset, _ = build_meeting_env(tmp_path)
+    config = Config.from_environment(unset.env)
+    assert config.meeting is not None and dict(config.meeting.access_levels) == {}
+    levels = json.dumps({" Ray@UtopiaHomes.com ": "admin", "meg@example.com": "public"})
+    prime, _ = build_meeting_env(
+        tmp_path, meeting={"GUEST_ANSWER_PROVIDER_MEETING_ACCESS_LEVELS": levels}
+    )
+    config = Config.from_environment(prime.env)
+    assert config.meeting is not None
+    assert dict(config.meeting.access_levels) == {RAY: "admin", "meg@example.com": "public"}

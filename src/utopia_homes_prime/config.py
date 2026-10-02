@@ -9,7 +9,7 @@ import json
 import os
 import re
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final, Literal
 
@@ -321,6 +321,30 @@ MEETING_SEARCH_MAX_COST_MICROUSD: Final = 60_000
 MEETING_DRAFT_BUDGET_MS: Final = 20_000
 """Homes' own cap on one draft call (target: a complete draft within 10-15 s)."""
 MAX_MEETING_IDEMPOTENCY_TTL_SECONDS: Final = 900
+MEETING_ACCESS_LEVELS: Final = ("public", "admin")
+"""Meeting access levels, lowest first. Homes maps verified meeting sign-ins to a level; anyone not
+listed is `public`. A new level goes in its place in this order."""
+
+
+def _meeting_access_levels(raw: str, name: str) -> dict[str, str]:
+    """`{email: level}` as JSON. Emails are normalized (trimmed, lowercased) for lookup."""
+    if not raw.strip():
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except ValueError as exc:
+        raise ConfigError(f"{name} is not valid JSON") from exc
+    if not isinstance(parsed, dict):
+        raise ConfigError(f"{name} must be a JSON object of email to level")
+    levels: dict[str, str] = {}
+    for email, level in parsed.items():
+        key = email.strip().lower()
+        if not 3 <= len(key) <= 254 or "@" not in key:
+            raise ConfigError(f"{name} keys must be email addresses")
+        if level not in MEETING_ACCESS_LEVELS:
+            raise ConfigError(f"{name} levels must be one of {', '.join(MEETING_ACCESS_LEVELS)}")
+        levels[key] = level
+    return levels
 
 
 @dataclass(frozen=True, slots=True)
@@ -348,6 +372,8 @@ class MeetingConfig:
     materials_allowed_digests: frozenset[str]
     idempotency_ttl_seconds: int
     search: MeetingSearchConfig | None = None
+    access_levels: Mapping[str, str] = field(default_factory=dict)
+    """Verified meeting email -> access level (MEETING_ACCESS_LEVELS); anyone unlisted is public."""
 
     @classmethod
     def from_environment(cls, env: Mapping[str, str], *, prime: HomesPrimeConfig) -> MeetingConfig:
@@ -443,6 +469,9 @@ class MeetingConfig:
             materials_allowed_digests=digests,
             idempotency_ttl_seconds=integer(
                 "IDEMPOTENCY_TTL_SECONDS", "300", 1, MAX_MEETING_IDEMPOTENCY_TTL_SECONDS
+            ),
+            access_levels=_meeting_access_levels(
+                env.get(prefix + "ACCESS_LEVELS") or "", f"{prefix}ACCESS_LEVELS"
             ),
         )
 

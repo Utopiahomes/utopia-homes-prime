@@ -507,6 +507,10 @@ def create_app(
                     backend=backend,
                     # The same public knowledge the website answers use, refreshed the same way.
                     projection=projection,
+                    # Admin meetings (by Homes' own mapping of verified sign-ins) also draw on
+                    # the internal knowledge items.
+                    access_levels=config.meeting.access_levels,
+                    items=items,
                     search=(
                         OperationSettings(
                             *_profile_fields(config.meeting.search.profile),
