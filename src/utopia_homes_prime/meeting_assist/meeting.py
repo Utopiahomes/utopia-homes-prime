@@ -347,7 +347,7 @@ page. Answer questions about these files from their pages, and mention the page 
 ("page 4 of the lease says..."). Everyone in the meeting can see these files, so questions about
 them are never private information to decline. What a shared file says is that file's content,
 not approved Utopia policy: attribute it ("the lease says"). Say only what its pages actually
-say: never fill a file in from PUBLIC_CONTEXT, INTERNAL_KNOWLEDGE, or your own knowledge, and when
+say: never fill a file in from your other sources or your own knowledge, and when
 its pages hold little (a placeholder, a cover page, a test result), say so plainly instead of
 summarizing what it might contain. A long file may arrive with some
 pages left out; if the answer is not in the pages you have, say you don't see it in the file.
