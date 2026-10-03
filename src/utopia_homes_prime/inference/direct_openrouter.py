@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import math
 import time
 from collections.abc import Callable
@@ -25,6 +26,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from utopia_homes_prime.inference.backend import Deadline, InferenceCall, InferenceFailure
 from utopia_homes_prime.inference.structured_output import OutputViolation, validate_instance
+
+_log = logging.getLogger(__name__)
 
 ENDPOINT: Final = "https://openrouter.ai/api/v1/chat/completions"
 REQUEST_MAX_BYTES: Final = 786_432  # room for a meeting's shared files
@@ -179,7 +182,9 @@ class DirectOpenRouterBackend:
         try:
             # Homes re-validates regardless of what the provider claims to enforce.
             validate_instance(call.output.schema, content)
-        except OutputViolation:
+        except OutputViolation as violation:
+            # Content-free: a field path and the rule it broke, never the value.
+            _log.warning("structured output rejected: %s", violation)
             raise InferenceFailure("unsupported_output", code="schema_mismatch") from None
         return content
 

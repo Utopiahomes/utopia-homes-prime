@@ -83,6 +83,8 @@ materials under any backend: the Tiamat backend accepts at most 65,536 character
 SPEAKER_MAX: Final = 120
 LINE_TEXT_MAX: Final = 4_000
 ANSWER_MAX: Final = 4_000
+ACTION_ITEM_MAX: Final = 300
+ACTION_CONTEXT_MAX: Final = 1_500
 DRAFT_LIST_MAX: Final = 20
 DRAFT_ITEM_MAX: Final = 500
 DRAFT_FIELD_MAX: Final = 120
@@ -381,6 +383,16 @@ Only say you are showing, sharing, pulling up, or putting something on screen wh
 display_material or show_file in this same reply. Never say you did something you did not do.
 Return only JSON matching the schema."""
 
+PROPOSALS_POLICY: Final = """WORK OUTSIDE THE MEETING: when a participant asks for work that
+needs a system or person outside this meeting (draft, prepare, or send a document; look something up
+in records; schedule; contact someone; book; or change a record), or agrees that it should be done,
+do not decline it and never claim to do it yourself. Instead set action_item to one short
+imperative line naming the work (and who it is for, if said), set action_context to two to four
+sentences summarizing what was said that the person doing it needs, and answer briefly that you
+have proposed it as an action item for someone to assign. Nothing runs until a person assigns it.
+This replaces the decline rule for such requests. For every other reply leave action_item and
+action_context as empty strings."""
+
 SEARCH_POLICY: Final = """You are Lucy, the Utopia Homes assistant, taking part in a live meeting.
 Your reply is spoken aloud to everyone in the meeting. Answer QUESTION from current web search
 results. Speak like a helpful colleague: one or two short sentences, about 40 words at most, plain
@@ -425,7 +437,10 @@ def shared_file_names(documents: list[DocumentPage]) -> list[str]:
 
 
 def respond_schema(
-    materials: tuple[Material, ...], documents: list[DocumentPage] | None = None
+    materials: tuple[Material, ...],
+    documents: list[DocumentPage] | None = None,
+    *,
+    proposals: bool = False,
 ) -> dict[str, Any]:
     display: dict[str, Any] = {"type": "null"}
     if materials:
@@ -436,7 +451,7 @@ def respond_schema(
     if files:
         show_file = {"type": ["string", "null"], "enum": [*files, None]}
         show_page = {"type": ["integer", "null"], "minimum": 1, "maximum": 10_000}
-    return {
+    schema: dict[str, Any] = {
         "type": "object",
         "properties": {
             "kind": {"type": "string", "enum": list(QUESTION_KINDS)},
@@ -460,6 +475,14 @@ def respond_schema(
         ],
         "additionalProperties": False,
     }
+    if proposals:
+        schema["properties"]["action_item"] = {"type": "string", "maxLength": ACTION_ITEM_MAX}
+        schema["properties"]["action_context"] = {
+            "type": "string",
+            "maxLength": ACTION_CONTEXT_MAX,
+        }
+        schema["required"] += ["action_item", "action_context"]
+    return schema
 
 
 def search_schema() -> dict[str, Any]:
@@ -526,6 +549,8 @@ def build_respond_messages(
     materials: tuple[Material, ...],
     knowledge: EffectiveKnowledge | None = None,
     internal: list[dict[str, Any]] | None = None,
+    *,
+    proposals: bool = False,
 ) -> tuple[ExecutionMessage, ...]:
     """`internal` is set only on admin turns, which add the access note and INTERNAL_KNOWLEDGE.
     Public turns get exactly the public prompt."""
@@ -545,6 +570,8 @@ def build_respond_messages(
         f"\n\nSHARED_DOCUMENTS={documents_block(request.documents)}" if request.documents else ""
     )
     policy = RESPOND_POLICY if internal is None else f"{RESPOND_POLICY}\n\n{ADMIN_ACCESS_POLICY}"
+    if proposals:
+        policy = f"{policy}\n\n{PROPOSALS_POLICY}"
     return (
         ExecutionMessage(
             "system",
@@ -724,6 +751,10 @@ def check_reply(
         reply["display_material"] = {"id": chosen.id, "version": chosen.version}
     if show is not None:
         reply["show_document"] = show
+    action = " ".join(str(content.get("action_item") or "").split())[:ACTION_ITEM_MAX]
+    if action:
+        context = " ".join(str(content.get("action_context") or "").split())
+        reply["propose_action"] = {"description": action, "context": context[:ACTION_CONTEXT_MAX]}
     return reply
 
 
@@ -857,8 +888,11 @@ class MeetingEngine:
         search_backend: InferenceBackend | None = None,
         access_levels: Mapping[str, str] | None = None,
         items: KnowledgeItemStore | None = None,
+        proposals: bool = False,
     ) -> None:
         self._projection = projection
+        # Lucy may propose work outside the meeting as an action item (a deployment switch).
+        self._proposals = proposals
         # Homes' own mapping of verified meeting emails to access levels, and the knowledge items
         # an admin turn may draw on.
         self._access_levels = dict(access_levels or {})
@@ -937,7 +971,9 @@ class MeetingEngine:
         correction: str | None = None,
         internal: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        system, user = build_respond_messages(request, materials, knowledge, internal)
+        system, user = build_respond_messages(
+            request, materials, knowledge, internal, proposals=self._proposals
+        )
         if correction:
             # The execution contract takes one system and one user message, so the correction
             # rides on the user message.
@@ -947,7 +983,10 @@ class MeetingEngine:
             "respond",
             self._respond,
             messages,
-            JsonSchemaOutput(RESPOND_SCHEMA_NAME, respond_schema(materials, request.documents)),
+            JsonSchemaOutput(
+                RESPOND_SCHEMA_NAME,
+                respond_schema(materials, request.documents, proposals=self._proposals),
+            ),
         )
         if content["outcome"] == "answered" and content["kind"] == "current":
             return {"outcome": "search", "query": content["search_query"].strip()}

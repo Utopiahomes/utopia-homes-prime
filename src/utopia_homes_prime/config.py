@@ -373,6 +373,8 @@ class MeetingConfig:
     idempotency_ttl_seconds: int
     search: MeetingSearchConfig | None = None
     access_levels: Mapping[str, str] = field(default_factory=dict)
+    # Lucy may propose work outside the meeting as an action item (MEETING_PROPOSALS=true).
+    proposals: bool = False
     """Verified meeting email -> access level (MEETING_ACCESS_LEVELS); anyone unlisted is public."""
 
     @classmethod
@@ -473,6 +475,7 @@ class MeetingConfig:
             access_levels=_meeting_access_levels(
                 env.get(prefix + "ACCESS_LEVELS") or "", f"{prefix}ACCESS_LEVELS"
             ),
+            proposals=(env.get(prefix + "PROPOSALS") or "").strip().lower() in ("1", "true"),
         )
 
 

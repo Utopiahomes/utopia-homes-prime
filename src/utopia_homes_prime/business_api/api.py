@@ -510,6 +510,7 @@ def create_app(
                     # Admin meetings (by Homes' own mapping of verified sign-ins) also draw on
                     # the internal knowledge items.
                     access_levels=config.meeting.access_levels,
+                    proposals=config.meeting.proposals,
                     items=items,
                     search=(
                         OperationSettings(
