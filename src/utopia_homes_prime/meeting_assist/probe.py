@@ -1,4 +1,4 @@
-"""Operator check: ask meeting Lucy a few made-up questions and print the SHAPE of each reply.
+"""Operator check: ask meeting Clara a few made-up questions and print the SHAPE of each reply.
 
     python -m utopia_homes_prime.meeting_assist.probe [--proposals]
 
@@ -24,8 +24,8 @@ from utopia_homes_prime.meeting_assist.meeting import RespondRequest
 
 QUESTIONS = (
     "Where does Utopia Homes operate?",
-    "Lucy, can you draft a one-page summary of the Shamrock for Linda?",
-    "Can someone send Linda the onboarding checklist? Lucy, make that an action item.",
+    "Clara, can you draft a one-page summary of the Shamrock for Linda?",
+    "Can someone send Linda the onboarding checklist? Clara, make that an action item.",
 )
 
 _validate = direct_openrouter.validate_instance  # type: ignore[attr-defined]

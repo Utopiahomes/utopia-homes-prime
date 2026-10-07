@@ -67,7 +67,7 @@ def test_identity_reports_homes_dragon_and_exact_materials(dragon):
     assert response.json() == {
         "contract_version": "1.0",
         "synth_id": "stoin:synth:utopia-homes-prime",
-        "display_name": "Lucy",
+        "display_name": "Clara",
         "software_version": "homes-business:release:test.1",
         "approved_materials": [
             {
