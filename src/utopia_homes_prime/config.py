@@ -165,6 +165,42 @@ def _direct_provider(
             raise ConfigError(f"{prefix}{name} must be a positive USD-per-million price")
         return value
 
+    # Fallback models on other providers, tried when the primary fails or is slow (routed.py), e.g.
+    # [{"model": "openai/gpt-4.1-mini", "providers": ["azure"],
+    #   "max_prompt_usd_per_million": 0.45, "max_completion_usd_per_million": 1.8}]
+    try:
+        raw_routes = json.loads(optional("OPENROUTER_FALLBACK_ROUTES", "[]") or "[]")
+    except ValueError as exc:
+        raise ConfigError(f"{prefix}OPENROUTER_FALLBACK_ROUTES must be JSON") from exc
+    if not isinstance(raw_routes, list) or len(raw_routes) > 4:
+        raise ConfigError(f"{prefix}OPENROUTER_FALLBACK_ROUTES must be a list of up to 4 routes")
+    fallback_routes: list[FallbackRouteConfig] = []
+    for entry in raw_routes:
+        try:
+            route = FallbackRouteConfig(
+                model=str(entry["model"]),
+                providers=tuple(str(item) for item in entry.get("providers", [])),
+                max_prompt_usd_per_million=float(entry["max_prompt_usd_per_million"]),
+                max_completion_usd_per_million=float(entry["max_completion_usd_per_million"]),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ConfigError(f"{prefix}OPENROUTER_FALLBACK_ROUTES has an invalid route") from exc
+        if (
+            not route.model
+            or len(route.model) > 200
+            or route.model.startswith("~")
+            or not 0 < route.max_prompt_usd_per_million < 1_000
+            or not 0 < route.max_completion_usd_per_million < 1_000
+        ):
+            raise ConfigError(f"{prefix}OPENROUTER_FALLBACK_ROUTES has an invalid route")
+        fallback_routes.append(route)
+    try:
+        hedge_after_ms = int(optional("OPENROUTER_HEDGE_AFTER_MS", "2500"))
+    except ValueError as exc:
+        raise ConfigError(f"{prefix}OPENROUTER_HEDGE_AFTER_MS must be an integer") from exc
+    if not 200 <= hedge_after_ms <= 10_000:
+        raise ConfigError(f"{prefix}OPENROUTER_HEDGE_AFTER_MS must be within 200-10000")
+
     return DirectProviderConfig(
         api_key=api_key,
         model=model,
@@ -175,6 +211,8 @@ def _direct_provider(
         referer=optional("OPENROUTER_REFERER", "https://www.utopiahomes.com"),
         allow_fallbacks=allow_fallbacks,
         provider_order=provider_order,
+        fallback_routes=tuple(fallback_routes),
+        hedge_after_ms=hedge_after_ms,
     )
 
 
@@ -204,6 +242,20 @@ class DirectProviderConfig:
     # Fall back to another endpoint within allowed_providers (still zero-data-retention only).
     allow_fallbacks: bool = False
     provider_order: tuple[str, ...] = ()
+    # Other models (other providers) to fall back to; the primary is tried first (routed.py).
+    fallback_routes: tuple[FallbackRouteConfig, ...] = ()
+    hedge_after_ms: int = 2500
+
+
+@dataclass(frozen=True, slots=True)
+class FallbackRouteConfig:
+    """One fallback model: its exact identifier, allowed providers and price ceilings. The same
+    zero-data-retention and no-data-collection rules apply as for the primary."""
+
+    model: str
+    providers: tuple[str, ...]
+    max_prompt_usd_per_million: float
+    max_completion_usd_per_million: float
 
 
 @dataclass(frozen=True, slots=True)

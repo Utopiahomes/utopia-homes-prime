@@ -113,6 +113,7 @@ from utopia_homes_prime.inference.direct_openrouter import (
     DirectOpenRouterBackend,
     DirectProviderSettings,
 )
+from utopia_homes_prime.inference.routed import RoutedBackend
 from utopia_homes_prime.inference.sme_client import (
     ExecutionIdentity,
     SharedModelExecutionClient,
@@ -387,7 +388,7 @@ def _inference_backend(
     if prime.tiamat is None:
         assert prime.direct is not None
         direct = prime.direct
-        return DirectOpenRouterBackend(
+        primary = DirectOpenRouterBackend(
             settings=DirectProviderSettings(
                 api_key=direct.api_key,
                 model=direct.model,
@@ -401,6 +402,29 @@ def _inference_backend(
             ),
             http=http,
         )
+        if not direct.fallback_routes:
+            return primary
+        # Other models on other providers take over when the primary is down or slow.
+        routes: list[tuple[str, InferenceBackend]] = [(direct.model, primary)]
+        for route in direct.fallback_routes:
+            routes.append(
+                (
+                    route.model,
+                    DirectOpenRouterBackend(
+                        settings=DirectProviderSettings(
+                            api_key=direct.api_key,
+                            model=route.model,
+                            allowed_providers=route.providers,
+                            max_prompt_usd_per_million=route.max_prompt_usd_per_million,
+                            max_completion_usd_per_million=route.max_completion_usd_per_million,
+                            referer=direct.referer,
+                            transit_allowance_ms=transit_allowance_ms,
+                        ),
+                        http=http,
+                    ),
+                )
+            )
+        return RoutedBackend(routes, hedge_after_ms=direct.hedge_after_ms)
     tiamat = prime.tiamat
     identity = ExecutionIdentity.from_pem(
         kid=tiamat.key_id,

@@ -12,13 +12,16 @@ turning it on for live meetings.
 from __future__ import annotations
 
 import argparse
+import dataclasses
+import json
+import time
 import uuid
 from typing import Any
 
 from fastapi.testclient import TestClient
 
 from utopia_homes_prime.business_api.api import create_app
-from utopia_homes_prime.config import Config
+from utopia_homes_prime.config import Config, FallbackRouteConfig
 from utopia_homes_prime.inference import direct_openrouter
 from utopia_homes_prime.meeting_assist.meeting import RespondRequest
 
@@ -55,17 +58,57 @@ async def _ask(engine: Any, message: str) -> None:
             "locale": "en-US",
         }
     )
+    started = time.perf_counter()
     result = await engine.respond(request, ())
     proposes = "propose_action" in result
-    print(f"PROBE result outcome={result.get('outcome')} proposes={proposes}")
+    print(
+        f"PROBE result outcome={result.get('outcome')} proposes={proposes} "
+        f"seconds={time.perf_counter() - started:.1f}"
+    )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--proposals", action="store_true", help="Try action-item proposals")
+    parser.add_argument("--model", help="Ask this model instead of the configured one")
+    parser.add_argument("--providers", default="", help="Its allowed providers, comma-separated")
+    parser.add_argument("--max-prompt", type=float, help="Its prompt price ceiling (USD/M)")
+    parser.add_argument("--max-completion", type=float, help="Its completion price ceiling")
+    parser.add_argument("--fallbacks", help="Fallback routes as JSON (see config.py)")
     args = parser.parse_args()
     direct_openrouter.validate_instance = _shape_check  # type: ignore[attr-defined]
-    app = create_app(config=Config.from_environment())
+    config = Config.from_environment()
+    direct = config.homes_prime.direct
+    if direct is not None and (args.model or args.fallbacks is not None):
+        if args.model:
+            direct = dataclasses.replace(
+                direct,
+                model=args.model,
+                allowed_providers=tuple(p for p in args.providers.split(",") if p),
+                max_prompt_usd_per_million=args.max_prompt or direct.max_prompt_usd_per_million,
+                max_completion_usd_per_million=(
+                    args.max_completion or direct.max_completion_usd_per_million
+                ),
+                provider_order=(),
+            )
+        if args.fallbacks is not None:
+            direct = dataclasses.replace(
+                direct,
+                fallback_routes=tuple(
+                    FallbackRouteConfig(
+                        model=r["model"],
+                        providers=tuple(r.get("providers", [])),
+                        max_prompt_usd_per_million=float(r["max_prompt_usd_per_million"]),
+                        max_completion_usd_per_million=float(r["max_completion_usd_per_million"]),
+                    )
+                    for r in json.loads(args.fallbacks)
+                ),
+            )
+        config = dataclasses.replace(
+            config, homes_prime=dataclasses.replace(config.homes_prime, direct=direct)
+        )
+        print("PROBE model", direct.model, "fallbacks", [r.model for r in direct.fallback_routes])
+    app = create_app(config=config)
     with TestClient(app) as client:
         engine = app.state.meeting_engine
         engine._proposals = args.proposals
