@@ -47,6 +47,8 @@ class DirectProviderSettings:
     web_search_engine: str | None = None
     """When set ("native" or "exa"), every call runs one OpenRouter web search first."""
     web_search_max_results: int = 5
+    allow_fallbacks: bool = False
+    """Try another endpoint of the allowed providers when one fails (zero data retention only)."""
 
 
 class _Usage(BaseModel):
@@ -99,7 +101,7 @@ class DirectOpenRouterBackend:
         provider: dict[str, Any] = {
             "zdr": True,
             "data_collection": "deny",
-            "allow_fallbacks": False,
+            "allow_fallbacks": settings.allow_fallbacks,
             "max_price": {
                 "prompt": settings.max_prompt_usd_per_million,
                 "completion": settings.max_completion_usd_per_million,
@@ -179,6 +181,7 @@ class DirectOpenRouterBackend:
             raise InferenceFailure("unsupported_output", code="content_not_json") from None
         if not isinstance(content, dict):
             raise InferenceFailure("unsupported_output", code="content_not_object")
+        _blank_null_only_fields(call.output.schema, content)
         try:
             # Homes re-validates regardless of what the provider claims to enforce.
             validate_instance(call.output.schema, content)
@@ -225,3 +228,12 @@ def _retry_after(value: str | None) -> int | None:
     if value is None or not value.isdigit():
         return None
     return min(30, max(1, int(value)))
+
+
+def _blank_null_only_fields(schema: dict[str, Any], content: dict[str, Any]) -> None:
+    """A top-level field whose schema allows only null carries no information, but some models
+    (Gemini) do not honour null-only fields and fill them in; blank them rather than reject the
+    whole reply (2026-10-07: meeting answers lost to "$.display_material: expected null")."""
+    for name, rule in (schema.get("properties") or {}).items():
+        if rule == {"type": "null"} and content.get(name) is not None:
+            content[name] = None

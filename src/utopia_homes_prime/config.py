@@ -141,6 +141,13 @@ def _direct_provider(
     )
     if any(not item or len(item) > 100 for item in providers):
         raise ConfigError(f"{prefix}OPENROUTER_ALLOWED_PROVIDERS is invalid")
+    # Let OpenRouter try another endpoint of the allowed providers when one fails or hangs
+    # (2026-10-07: google-vertex/global degraded and every meeting answer timed out).
+    allow_fallbacks = optional("OPENROUTER_ALLOW_FALLBACKS", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
 
     def price(name: str) -> float:
         try:
@@ -159,6 +166,7 @@ def _direct_provider(
         max_prompt_usd_per_million=price("OPENROUTER_MAX_PROMPT_USD_PER_MILLION"),
         max_completion_usd_per_million=price("OPENROUTER_MAX_COMPLETION_USD_PER_MILLION"),
         referer=optional("OPENROUTER_REFERER", "https://www.utopiahomes.com"),
+        allow_fallbacks=allow_fallbacks,
     )
 
 
@@ -185,6 +193,8 @@ class DirectProviderConfig:
     max_prompt_usd_per_million: float
     max_completion_usd_per_million: float
     referer: str
+    # Fall back to another endpoint within allowed_providers (still zero-data-retention only).
+    allow_fallbacks: bool = False
 
 
 @dataclass(frozen=True, slots=True)

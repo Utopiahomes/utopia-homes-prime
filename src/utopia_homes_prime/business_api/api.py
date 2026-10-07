@@ -373,6 +373,7 @@ def _search_backend(
             transit_allowance_ms=transit_allowance_ms,
             web_search_engine=search.engine,
             web_search_max_results=search.max_results,
+            allow_fallbacks=prime.direct.allow_fallbacks,
         ),
         http=http,
     )
@@ -394,6 +395,7 @@ def _inference_backend(
                 max_completion_usd_per_million=direct.max_completion_usd_per_million,
                 referer=direct.referer,
                 transit_allowance_ms=transit_allowance_ms,
+                allow_fallbacks=direct.allow_fallbacks,
             ),
             http=http,
         )
