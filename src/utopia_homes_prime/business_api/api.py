@@ -374,6 +374,7 @@ def _search_backend(
             web_search_engine=search.engine,
             web_search_max_results=search.max_results,
             allow_fallbacks=prime.direct.allow_fallbacks,
+            provider_order=prime.direct.provider_order,
         ),
         http=http,
     )
@@ -396,6 +397,7 @@ def _inference_backend(
                 referer=direct.referer,
                 transit_allowance_ms=transit_allowance_ms,
                 allow_fallbacks=direct.allow_fallbacks,
+                provider_order=direct.provider_order,
             ),
             http=http,
         )

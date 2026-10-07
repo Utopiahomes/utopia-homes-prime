@@ -148,6 +148,13 @@ def _direct_provider(
         "true",
         "yes",
     }
+    # Which allowed endpoints to try first, in order (e.g. google-vertex/us,google-vertex/eu);
+    # with fallbacks on, every other endpoint of the allowed providers is still tried after them.
+    provider_order = tuple(
+        item.strip()
+        for item in optional("OPENROUTER_PROVIDER_ORDER", "").split(",")
+        if item.strip()
+    )
 
     def price(name: str) -> float:
         try:
@@ -167,6 +174,7 @@ def _direct_provider(
         max_completion_usd_per_million=price("OPENROUTER_MAX_COMPLETION_USD_PER_MILLION"),
         referer=optional("OPENROUTER_REFERER", "https://www.utopiahomes.com"),
         allow_fallbacks=allow_fallbacks,
+        provider_order=provider_order,
     )
 
 
@@ -195,6 +203,7 @@ class DirectProviderConfig:
     referer: str
     # Fall back to another endpoint within allowed_providers (still zero-data-retention only).
     allow_fallbacks: bool = False
+    provider_order: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

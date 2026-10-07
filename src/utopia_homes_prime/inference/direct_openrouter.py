@@ -49,6 +49,8 @@ class DirectProviderSettings:
     web_search_max_results: int = 5
     allow_fallbacks: bool = False
     """Try another endpoint of the allowed providers when one fails (zero data retention only)."""
+    provider_order: tuple[str, ...] = ()
+    """Endpoints to try first; with fallbacks on, the rest of the allowed providers follow."""
 
 
 class _Usage(BaseModel):
@@ -109,6 +111,8 @@ class DirectOpenRouterBackend:
         }
         if settings.allowed_providers:
             provider["only"] = list(settings.allowed_providers)
+        if settings.provider_order:
+            provider["order"] = list(settings.provider_order)
         body: dict[str, Any] = {
             "model": settings.model,
             "messages": [{"role": m.role, "content": m.content} for m in call.messages],
