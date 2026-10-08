@@ -66,24 +66,56 @@ def test_a_failing_primary_moves_on_at_once():
     assert time.monotonic() - started < 0.5
 
 
-def test_a_route_that_keeps_failing_rests_then_returns():
-    clock = [100.0]
+def ladder(clock: list[float]):
     primary, fallback = Fake("gemini", fail="deadline"), Fake("gpt")
     backend = RoutedBackend(
         [("gemini", primary), ("gpt", fallback)],
         hedge_after_ms=5000,
-        breaker_failures=2,
-        breaker_seconds=60,
+        minute_seconds=60,
         monotonic=lambda: clock[0],
     )
+    return backend, primary
+
+
+def test_two_strikes_rest_two_minutes_then_misses_double_the_rest_up_to_64():
+    clock = [100.0]
+    backend, primary = ladder(clock)
     run(backend)
-    run(backend)
+    run(backend)  # second strike in a row: rests 2 minutes
     assert primary.calls == 2
     run(backend)  # resting: the fallback goes first and answers, the primary isn't called
     assert primary.calls == 2
-    clock[0] += 61
+    for minutes in (2, 4, 8, 16, 32, 64, 64):
+        clock[0] += minutes * 60 - 1
+        calls = primary.calls
+        run(backend)  # a second early: still resting, not tried
+        assert primary.calls == calls
+        clock[0] += 1
+        run(backend)  # its try: missed, so it rests for the next step of the ladder
+        assert primary.calls == calls + 1
+    assert backend._routes[0].health.level == 6  # capped at 64 minutes
+
+
+def test_two_wins_in_a_row_on_trial_restore_it_and_one_miss_sends_it_back():
+    clock = [100.0]
+    backend, primary = ladder(clock)
+    run(backend)
+    run(backend)  # resting 2 minutes
+    clock[0] += 121
     primary.fail = None
-    assert run(backend) == {"from": "gemini"}
+    assert run(backend) == {"from": "gemini"}  # first win on trial
+    primary.fail = "deadline"
+    run(backend)  # a miss on the second try: back to resting, 4 minutes
+    health = backend._routes[0].health
+    assert health.level == 2 and health.open_until == clock[0] + 240
+    clock[0] += 241
+    primary.fail = None
+    run(backend)
+    run(backend)  # two wins in a row: restored
+    assert backend._routes[0].health.level == 0
+    primary.fail = "deadline"
+    run(backend)  # one strike while healthy doesn't rest it
+    assert backend._routes[0].health.level == 0
 
 
 def test_everything_failing_reports_a_failure():

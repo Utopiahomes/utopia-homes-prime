@@ -7,6 +7,12 @@ answer wins (the others are cancelled). A route that keeps failing is skipped fo
 provider outage costs one slow answer, not every answer. With a single route this is just that
 route.
 
+The rest rule (Ray, 2026-10-07): a strike is an error, a timeout, an invalid answer, or losing
+the race to another route. Two strikes in a row and the route rests at the back of the line for
+2 minutes. Then it gets a try: a miss sends it back for twice as long (4, 8, 16, 32, then at most
+64 minutes); a success earns a second try, and two successes in a row restore it to its place
+with the ladder reset.
+
 2026-10-07: Google Vertex slowed down for hours and every meeting answer timed out; nothing outside
 Google could take over.
 """
@@ -32,8 +38,15 @@ _log = logging.getLogger(__name__)
 
 @dataclass
 class _Health:
-    failures: int = 0
-    open_until: float = 0.0
+    strikes: int = 0  # misses in a row while healthy
+    level: int = 0  # 0 = healthy; n = resting 2**n minutes after its last miss
+    open_until: float = 0.0  # resting until then (monotonic seconds)
+    trial_wins: int = 0  # successes in a row since its rest ended
+
+
+STRIKES_TO_REST = 2
+FIRST_REST_LEVEL = 1  # 2 minutes
+MAX_REST_LEVEL = 6  # 64 minutes
 
 
 @dataclass
@@ -49,16 +62,14 @@ class RoutedBackend:
         routes: Sequence[tuple[str, InferenceBackend]],
         *,
         hedge_after_ms: int,
-        breaker_failures: int = 3,
-        breaker_seconds: float = 120.0,
+        minute_seconds: float = 60.0,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         if not routes:
             raise ValueError("at least one route is required")
         self._routes = [Route(name, backend) for name, backend in routes]
         self._hedge_after = hedge_after_ms / 1000
-        self._breaker_failures = breaker_failures
-        self._breaker_seconds = breaker_seconds
+        self._minute = minute_seconds
         self._monotonic = monotonic
 
     @property
@@ -74,18 +85,31 @@ class RoutedBackend:
         return healthy + resting
 
     def _record(self, route: Route, ok: bool) -> None:
-        if ok:
-            route.health = _Health()
+        health = route.health
+        now = self._monotonic()
+        if health.open_until > now:
+            return  # resting (tried only because everything else failed): no change
+        if health.level == 0:  # healthy
+            if ok:
+                health.strikes = 0
+                return
+            health.strikes += 1
+            if health.strikes >= STRIKES_TO_REST:
+                self._rest(route, FIRST_REST_LEVEL)
             return
-        route.health.failures += 1
-        if route.health.failures >= self._breaker_failures:
-            route.health.open_until = self._monotonic() + self._breaker_seconds
-            _log.warning(
-                "model route resting after failures: route=%s failures=%d seconds=%d",
-                route.name,
-                route.health.failures,
-                int(self._breaker_seconds),
-            )
+        # Back from a rest, on trial.
+        if ok:
+            health.trial_wins += 1
+            if health.trial_wins >= 2:
+                route.health = _Health()
+                _log.info("model route restored: route=%s", route.name)
+            return
+        self._rest(route, min(health.level + 1, MAX_REST_LEVEL))
+
+    def _rest(self, route: Route, level: int) -> None:
+        minutes = 2**level
+        route.health = _Health(level=level, open_until=self._monotonic() + minutes * self._minute)
+        _log.warning("model route resting: route=%s minutes=%d", route.name, minutes)
 
     async def infer(self, call: InferenceCall, *, deadline: Deadline) -> dict[str, Any]:
         order = self._order()
