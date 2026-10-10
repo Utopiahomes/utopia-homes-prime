@@ -1,0 +1,1212 @@
+{
+ "schema": "lucy-public-knowledge-v1",
+ "entries": [
+  {
+   "id": "about-owner-led-hospitality",
+   "service_line": "general",
+   "kind": "description",
+   "title": "Owner-led hospitality",
+   "approved_text": "Utopia Homes is built from the owner’s side of hospitality. Its approach begins with the home, carries through the guest experience, and focuses on the details that make a stay memorable.",
+   "aliases": [
+    "what makes Utopia different",
+    "who runs Utopia",
+    "hosting experience"
+   ],
+   "topics": [
+    "owners",
+    "hospitality",
+    "about"
+   ],
+   "route": "about",
+   "source": {
+    "id": "about-page",
+    "label": "About Utopia Homes",
+    "href": "https://www.utopiahomes.com/about"
+   },
+   "links": [
+    {
+     "id": "about-page-link",
+     "label": "Meet Utopia Homes",
+     "href": "https://www.utopiahomes.com/about"
+    }
+   ],
+   "direct_answer": false,
+   "effective_from": "2026-09-12T00:00:00Z"
+  },
+  {
+   "id": "booking-external-handoff",
+   "service_line": "homes",
+   "kind": "policy",
+   "title": "How booking works",
+   "approved_text": "Utopia property pages introduce each home. Use a home’s Check availability link to continue to its configured external booking page for current availability, pricing, and complete booking details.",
+   "aliases": [
+    "reserve",
+    "make a reservation",
+    "book a stay",
+    "check dates"
+   ],
+   "topics": [
+    "booking",
+    "availability",
+    "pricing"
+   ],
+   "route": "stays",
+   "source": {
+    "id": "stays-page",
+    "label": "Utopia stays",
+    "href": "https://www.utopiahomes.com/stays"
+   },
+   "links": [
+    {
+     "id": "stays-page-link",
+     "label": "Explore all stays",
+     "href": "https://www.utopiahomes.com/stays"
+    }
+   ],
+   "direct_answer": true,
+   "effective_from": "2026-09-12T00:00:00Z"
+  },
+  {
+   "id": "buttercup-accessibility",
+   "kind": "policy",
+   "title": "Buttercup Beauty accessibility",
+   "approved_text": "Buttercup Beauty: Guests climb a few stairs at the entrance. Please contact us before booking to discuss specific accessibility needs.",
+   "aliases": [
+    "wheelchair",
+    "stairs",
+    "mobility",
+    "accessible"
+   ],
+   "topics": [
+    "accessibility"
+   ],
+   "direct_answer": true,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "buttercup-beauty",
+   "property_facts": {
+    "max_guests": 22,
+    "parking_spaces": 4,
+    "has_pool": true,
+    "has_hot_tub": true,
+    "bedrooms": 7,
+    "bathrooms": 3.5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "buttercup-page",
+    "label": "Buttercup Beauty",
+    "href": "https://www.utopiahomes.com/stays/buttercup-beauty"
+   },
+   "links": [
+    {
+     "id": "buttercup-page-link",
+     "label": "Explore Buttercup Beauty",
+     "href": "https://www.utopiahomes.com/stays/buttercup-beauty"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "buttercup-amenities",
+   "kind": "fact",
+   "title": "Buttercup Beauty amenities",
+   "approved_text": "Buttercup Beauty amenities. Outside: shared beach access, heated private pool, private hot tub, and large fenced backyard. At home: kitchen, Wi-Fi, in-unit washer and dryer, smart TVs, and foosball table.",
+   "aliases": [
+    "swimming",
+    "outside",
+    "yard",
+    "spa",
+    "beach",
+    "wifi",
+    "kitchen",
+    "laundry"
+   ],
+   "topics": [
+    "amenities",
+    "pool",
+    "outdoors"
+   ],
+   "direct_answer": true,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "buttercup-beauty",
+   "property_facts": {
+    "max_guests": 22,
+    "parking_spaces": 4,
+    "has_pool": true,
+    "has_hot_tub": true,
+    "bedrooms": 7,
+    "bathrooms": 3.5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "buttercup-page",
+    "label": "Buttercup Beauty",
+    "href": "https://www.utopiahomes.com/stays/buttercup-beauty"
+   },
+   "links": [
+    {
+     "id": "buttercup-page-link",
+     "label": "Explore Buttercup Beauty",
+     "href": "https://www.utopiahomes.com/stays/buttercup-beauty"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "buttercup-capacity",
+   "kind": "fact",
+   "title": "Buttercup Beauty capacity",
+   "approved_text": "Buttercup Beauty welcomes up to 22 guests and has 7 bedrooms, 12 beds, and 3.5 bathrooms.",
+   "aliases": [
+    "Buttercup size",
+    "Buttercup sleeps",
+    "large group",
+    "people"
+   ],
+   "topics": [
+    "capacity",
+    "bedrooms",
+    "bathrooms"
+   ],
+   "direct_answer": true,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "buttercup-beauty",
+   "property_facts": {
+    "max_guests": 22,
+    "parking_spaces": 4,
+    "has_pool": true,
+    "has_hot_tub": true,
+    "bedrooms": 7,
+    "bathrooms": 3.5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "buttercup-page",
+    "label": "Buttercup Beauty",
+    "href": "https://www.utopiahomes.com/stays/buttercup-beauty"
+   },
+   "links": [
+    {
+     "id": "buttercup-page-link",
+     "label": "Explore Buttercup Beauty",
+     "href": "https://www.utopiahomes.com/stays/buttercup-beauty"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "buttercup-highlights",
+   "kind": "fact",
+   "title": "Buttercup Beauty highlights",
+   "approved_text": "Highlights of Buttercup Beauty: Approximately 3,200 square feet of interior space; Heated private pool and eight-person hot tub; Game room, covered dining area, and bakery directly across the street.",
+   "aliases": [
+    "what makes Buttercup special",
+    "features",
+    "square feet"
+   ],
+   "topics": [
+    "features",
+    "overview"
+   ],
+   "direct_answer": true,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "buttercup-beauty",
+   "property_facts": {
+    "max_guests": 22,
+    "parking_spaces": 4,
+    "has_pool": true,
+    "has_hot_tub": true,
+    "bedrooms": 7,
+    "bathrooms": 3.5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "buttercup-page",
+    "label": "Buttercup Beauty",
+    "href": "https://www.utopiahomes.com/stays/buttercup-beauty"
+   },
+   "links": [
+    {
+     "id": "buttercup-page-link",
+     "label": "Explore Buttercup Beauty",
+     "href": "https://www.utopiahomes.com/stays/buttercup-beauty"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "buttercup-overview",
+   "kind": "description",
+   "title": "About Buttercup Beauty",
+   "approved_text": "Buttercup Beauty is a generous shore home designed around time together. Its open living spaces, game room, and fenced backyard make it especially well suited to multigenerational groups and friends traveling with dogs. Buttercup Beauty is in Wildwood Crest, New Jersey.",
+   "aliases": [
+    "Buttercup",
+    "Buttercup house",
+    "Wildwood Crest house"
+   ],
+   "topics": [
+    "overview",
+    "location"
+   ],
+   "direct_answer": false,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "buttercup-beauty",
+   "property_facts": {
+    "max_guests": 22,
+    "parking_spaces": 4,
+    "has_pool": true,
+    "has_hot_tub": true,
+    "bedrooms": 7,
+    "bathrooms": 3.5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "buttercup-page",
+    "label": "Buttercup Beauty",
+    "href": "https://www.utopiahomes.com/stays/buttercup-beauty"
+   },
+   "links": [
+    {
+     "id": "buttercup-page-link",
+     "label": "Explore Buttercup Beauty",
+     "href": "https://www.utopiahomes.com/stays/buttercup-beauty"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "buttercup-parking",
+   "kind": "fact",
+   "title": "Buttercup Beauty parking",
+   "approved_text": "Buttercup Beauty has parking for 4 cars across two driveways, plus street parking.",
+   "aliases": [
+    "driveway",
+    "vehicles",
+    "automobiles",
+    "garage"
+   ],
+   "topics": [
+    "parking"
+   ],
+   "direct_answer": true,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "buttercup-beauty",
+   "property_facts": {
+    "max_guests": 22,
+    "parking_spaces": 4,
+    "has_pool": true,
+    "has_hot_tub": true,
+    "bedrooms": 7,
+    "bathrooms": 3.5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "buttercup-page",
+    "label": "Buttercup Beauty",
+    "href": "https://www.utopiahomes.com/stays/buttercup-beauty"
+   },
+   "links": [
+    {
+     "id": "buttercup-page-link",
+     "label": "Explore Buttercup Beauty",
+     "href": "https://www.utopiahomes.com/stays/buttercup-beauty"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "buttercup-pets",
+   "kind": "policy",
+   "title": "Buttercup Beauty pet policy",
+   "approved_text": "Buttercup Beauty: Dogs of any size are welcome, up to 4 dogs, with no pet fee. No cats.",
+   "aliases": [
+    "pet friendly",
+    "bring my dog",
+    "pups"
+   ],
+   "topics": [
+    "pets"
+   ],
+   "direct_answer": true,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "buttercup-beauty",
+   "property_facts": {
+    "max_guests": 22,
+    "parking_spaces": 4,
+    "has_pool": true,
+    "has_hot_tub": true,
+    "bedrooms": 7,
+    "bathrooms": 3.5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "buttercup-page",
+    "label": "Buttercup Beauty",
+    "href": "https://www.utopiahomes.com/stays/buttercup-beauty"
+   },
+   "links": [
+    {
+     "id": "buttercup-page-link",
+     "label": "Explore Buttercup Beauty",
+     "href": "https://www.utopiahomes.com/stays/buttercup-beauty"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "central-accessibility",
+   "kind": "policy",
+   "title": "Central Ave Socialization accessibility",
+   "approved_text": "Central Ave Socialization: Please contact us before booking to discuss specific accessibility needs.",
+   "aliases": [
+    "wheelchair",
+    "stairs",
+    "mobility",
+    "accessible"
+   ],
+   "topics": [
+    "accessibility"
+   ],
+   "direct_answer": true,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "central-ave-socialization",
+   "property_facts": {
+    "max_guests": 22,
+    "parking_spaces": 3,
+    "has_pool": true,
+    "has_hot_tub": true,
+    "bedrooms": 7,
+    "bathrooms": 3.5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "central-page",
+    "label": "Central Ave Socialization",
+    "href": "https://www.utopiahomes.com/stays/central-ave-socialization"
+   },
+   "links": [
+    {
+     "id": "central-page-link",
+     "label": "Explore Central Ave Socialization",
+     "href": "https://www.utopiahomes.com/stays/central-ave-socialization"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "central-amenities",
+   "kind": "fact",
+   "title": "Central Ave Socialization amenities",
+   "approved_text": "Central Ave Socialization amenities. Outside: beach access, heated private pool, hot tub, fully fenced backyard, and patio seating and fire pit. At home: kitchen, Wi-Fi, TV, washer, and in-unit dryer.",
+   "aliases": [
+    "swimming",
+    "outside",
+    "yard",
+    "spa",
+    "beach",
+    "wifi",
+    "kitchen",
+    "laundry"
+   ],
+   "topics": [
+    "amenities",
+    "pool",
+    "outdoors"
+   ],
+   "direct_answer": true,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "central-ave-socialization",
+   "property_facts": {
+    "max_guests": 22,
+    "parking_spaces": 3,
+    "has_pool": true,
+    "has_hot_tub": true,
+    "bedrooms": 7,
+    "bathrooms": 3.5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "central-page",
+    "label": "Central Ave Socialization",
+    "href": "https://www.utopiahomes.com/stays/central-ave-socialization"
+   },
+   "links": [
+    {
+     "id": "central-page-link",
+     "label": "Explore Central Ave Socialization",
+     "href": "https://www.utopiahomes.com/stays/central-ave-socialization"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "central-capacity",
+   "kind": "fact",
+   "title": "Central Ave Socialization capacity",
+   "approved_text": "Central Ave Socialization welcomes up to 22 guests and has 7 bedrooms, 18 beds, and 3.5 bathrooms.",
+   "aliases": [
+    "Central size",
+    "Central sleeps",
+    "large group",
+    "people"
+   ],
+   "topics": [
+    "capacity",
+    "bedrooms",
+    "bathrooms"
+   ],
+   "direct_answer": true,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "central-ave-socialization",
+   "property_facts": {
+    "max_guests": 22,
+    "parking_spaces": 3,
+    "has_pool": true,
+    "has_hot_tub": true,
+    "bedrooms": 7,
+    "bathrooms": 3.5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "central-page",
+    "label": "Central Ave Socialization",
+    "href": "https://www.utopiahomes.com/stays/central-ave-socialization"
+   },
+   "links": [
+    {
+     "id": "central-page-link",
+     "label": "Explore Central Ave Socialization",
+     "href": "https://www.utopiahomes.com/stays/central-ave-socialization"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "central-highlights",
+   "kind": "fact",
+   "title": "Central Ave Socialization highlights",
+   "approved_text": "Highlights of Central Ave Socialization: Approximately a five-minute walk to Albert I. Allen Memorial Park; Heated private pool and hot tub in a fully fenced backyard; Seven bedrooms and eighteen listed beds for large-group stays.",
+   "aliases": [
+    "what makes Central special",
+    "features",
+    "square feet"
+   ],
+   "topics": [
+    "features",
+    "overview"
+   ],
+   "direct_answer": true,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "central-ave-socialization",
+   "property_facts": {
+    "max_guests": 22,
+    "parking_spaces": 3,
+    "has_pool": true,
+    "has_hot_tub": true,
+    "bedrooms": 7,
+    "bathrooms": 3.5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "central-page",
+    "label": "Central Ave Socialization",
+    "href": "https://www.utopiahomes.com/stays/central-ave-socialization"
+   },
+   "links": [
+    {
+     "id": "central-page-link",
+     "label": "Explore Central Ave Socialization",
+     "href": "https://www.utopiahomes.com/stays/central-ave-socialization"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "central-overview",
+   "kind": "description",
+   "title": "About Central Ave Socialization",
+   "approved_text": "Central Ave Socialization is a recently renovated group retreat built around easy time together. An open living area and fully fenced backyard create a welcoming home base for beach days, pool time, and evenings with the whole crew—including dogs. Central Ave Socialization is in North Wildwood, New Jersey.",
+   "aliases": [
+    "Central",
+    "Central house",
+    "North Wildwood house"
+   ],
+   "topics": [
+    "overview",
+    "location"
+   ],
+   "direct_answer": false,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "central-ave-socialization",
+   "property_facts": {
+    "max_guests": 22,
+    "parking_spaces": 3,
+    "has_pool": true,
+    "has_hot_tub": true,
+    "bedrooms": 7,
+    "bathrooms": 3.5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "central-page",
+    "label": "Central Ave Socialization",
+    "href": "https://www.utopiahomes.com/stays/central-ave-socialization"
+   },
+   "links": [
+    {
+     "id": "central-page-link",
+     "label": "Explore Central Ave Socialization",
+     "href": "https://www.utopiahomes.com/stays/central-ave-socialization"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "central-parking",
+   "kind": "fact",
+   "title": "Central Ave Socialization parking",
+   "approved_text": "Central Ave Socialization has parking for 3 cars.",
+   "aliases": [
+    "driveway",
+    "vehicles",
+    "automobiles",
+    "garage"
+   ],
+   "topics": [
+    "parking"
+   ],
+   "direct_answer": true,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "central-ave-socialization",
+   "property_facts": {
+    "max_guests": 22,
+    "parking_spaces": 3,
+    "has_pool": true,
+    "has_hot_tub": true,
+    "bedrooms": 7,
+    "bathrooms": 3.5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "central-page",
+    "label": "Central Ave Socialization",
+    "href": "https://www.utopiahomes.com/stays/central-ave-socialization"
+   },
+   "links": [
+    {
+     "id": "central-page-link",
+     "label": "Explore Central Ave Socialization",
+     "href": "https://www.utopiahomes.com/stays/central-ave-socialization"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "central-pets",
+   "kind": "policy",
+   "title": "Central Ave Socialization pet policy",
+   "approved_text": "Central Ave Socialization: Dogs of all sizes are welcome, up to 4 dogs, with no pet fee. No cats.",
+   "aliases": [
+    "pet friendly",
+    "bring my dog",
+    "pups"
+   ],
+   "topics": [
+    "pets"
+   ],
+   "direct_answer": true,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "central-ave-socialization",
+   "property_facts": {
+    "max_guests": 22,
+    "parking_spaces": 3,
+    "has_pool": true,
+    "has_hot_tub": true,
+    "bedrooms": 7,
+    "bathrooms": 3.5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "central-page",
+    "label": "Central Ave Socialization",
+    "href": "https://www.utopiahomes.com/stays/central-ave-socialization"
+   },
+   "links": [
+    {
+     "id": "central-page-link",
+     "label": "Explore Central Ave Socialization",
+     "href": "https://www.utopiahomes.com/stays/central-ave-socialization"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "collection-overview",
+   "service_line": "homes",
+   "kind": "navigation",
+   "title": "Current Utopia Homes collection",
+   "approved_text": "The current Utopia Homes collection includes Buttercup Beauty in Wildwood Crest, Central Ave Socialization in North Wildwood, and The Shamrock in Wildwood, New Jersey.",
+   "aliases": [
+    "which homes",
+    "places to stay",
+    "properties",
+    "rentals"
+   ],
+   "topics": [
+    "location",
+    "homes",
+    "stays"
+   ],
+   "route": "stays",
+   "source": {
+    "id": "stays-page",
+    "label": "Utopia stays",
+    "href": "https://www.utopiahomes.com/stays"
+   },
+   "links": [
+    {
+     "id": "stays-page-link",
+     "label": "Explore all stays",
+     "href": "https://www.utopiahomes.com/stays"
+    }
+   ],
+   "direct_answer": true,
+   "effective_from": "2026-09-12T00:00:00Z"
+  },
+  {
+   "id": "contact-utopia",
+   "service_line": "general",
+   "kind": "call_to_action",
+   "title": "Contact Utopia Homes",
+   "approved_text": "Use the Utopia Homes contact form for questions about stays, property management, Utopia Design, or general inquiries.",
+   "aliases": [
+    "get in touch",
+    "talk to someone",
+    "send a message",
+    "help"
+   ],
+   "topics": [
+    "contact",
+    "booking",
+    "owners",
+    "design"
+   ],
+   "route": "contact",
+   "source": {
+    "id": "contact-page",
+    "label": "Contact Utopia Homes",
+    "href": "https://www.utopiahomes.com/contact"
+   },
+   "links": [
+    {
+     "id": "contact-page-link",
+     "label": "Contact Utopia Homes",
+     "href": "https://www.utopiahomes.com/contact"
+    }
+   ],
+   "direct_answer": true,
+   "effective_from": "2026-09-12T00:00:00Z"
+  },
+  {
+   "id": "design-estimate",
+   "service_line": "design",
+   "kind": "policy",
+   "title": "Utopia Design preliminary estimate",
+   "approved_text": "The Utopia Design Quote Studio uses the project details, preferences, and inspiration you provide to prepare a nonbinding preliminary estimate. Final pricing follows review by the Utopia team.",
+   "aliases": [
+    "design quote",
+    "how much design costs",
+    "pricing engine",
+    "project estimate"
+   ],
+   "topics": [
+    "design",
+    "estimate"
+   ],
+   "route": "design",
+   "source": {
+    "id": "design-page",
+    "label": "Utopia Design",
+    "href": "https://www.utopiahomes.com/design"
+   },
+   "links": [
+    {
+     "id": "design-quote-link",
+     "label": "Start a design estimate",
+     "href": "https://www.utopiahomes.com/design/quote"
+    }
+   ],
+   "direct_answer": true,
+   "effective_from": "2026-09-12T00:00:00Z"
+  },
+  {
+   "id": "design-personal-services",
+   "service_line": "design",
+   "kind": "description",
+   "title": "Design services for personal homes",
+   "approved_text": "For personal homes, Utopia Design can help transform a room, create a whole-home design plan, or plan the design direction for a renovation or new home.",
+   "aliases": [
+    "interior design",
+    "decorate my home",
+    "whole house",
+    "room makeover"
+   ],
+   "topics": [
+    "design",
+    "services"
+   ],
+   "route": "design",
+   "source": {
+    "id": "design-page",
+    "label": "Utopia Design",
+    "href": "https://www.utopiahomes.com/design"
+   },
+   "links": [
+    {
+     "id": "design-personal-link",
+     "label": "Explore personal-home design",
+     "href": "https://www.utopiahomes.com/design?audience=personal"
+    }
+   ],
+   "direct_answer": false,
+   "effective_from": "2026-09-12T00:00:00Z"
+  },
+  {
+   "id": "design-rental-services",
+   "service_line": "design",
+   "kind": "description",
+   "title": "Design services for rentals",
+   "approved_text": "For rentals, Utopia Design can evaluate an existing rental, furnish an empty property, or plan the design direction for a rental renovation.",
+   "aliases": [
+    "vacation rental design",
+    "rental interiors",
+    "furnish rental",
+    "rental audit"
+   ],
+   "topics": [
+    "design",
+    "owners",
+    "services"
+   ],
+   "route": "design",
+   "source": {
+    "id": "design-page",
+    "label": "Utopia Design",
+    "href": "https://www.utopiahomes.com/design"
+   },
+   "links": [
+    {
+     "id": "design-rental-link",
+     "label": "Explore rental design",
+     "href": "https://www.utopiahomes.com/design?audience=rental"
+    }
+   ],
+   "direct_answer": false,
+   "effective_from": "2026-09-12T00:00:00Z"
+  },
+  {
+   "id": "destination-wildwoods-cape-may",
+   "service_line": "homes",
+   "kind": "description",
+   "title": "The Wildwoods and Cape May",
+   "approved_text": "Utopia’s home coast includes the Wildwoods and Cape May in Southern Cape May County, with broad beaches, boardwalk energy, historic streets, and reasons to gather beyond the summer peak.",
+   "aliases": [
+    "where are the homes",
+    "Jersey Shore",
+    "Wildwood Crest",
+    "North Wildwood"
+   ],
+   "topics": [
+    "location",
+    "destination"
+   ],
+   "route": "destination",
+   "source": {
+    "id": "wildwood-destination-page",
+    "label": "Wildwood and Cape May",
+    "href": "https://www.utopiahomes.com/destinations/wildwood-new-jersey"
+   },
+   "links": [
+    {
+     "id": "wildwood-destination-link",
+     "label": "Explore the destination",
+     "href": "https://www.utopiahomes.com/destinations/wildwood-new-jersey"
+    }
+   ],
+   "direct_answer": false,
+   "effective_from": "2026-09-12T00:00:00Z"
+  },
+  {
+   "id": "membership-status",
+   "service_line": "general",
+   "kind": "policy",
+   "title": "Utopia membership status",
+   "approved_text": "Utopia membership is coming soon and is not live today. Join the launch list to hear when it opens and what early members can expect.",
+   "aliases": [
+    "membership launch",
+    "join Utopia",
+    "member perks",
+    "rewards"
+   ],
+   "topics": [
+    "membership"
+   ],
+   "route": "membership",
+   "source": {
+    "id": "membership-page",
+    "label": "Utopia membership",
+    "href": "https://www.utopiahomes.com/membership"
+   },
+   "links": [
+    {
+     "id": "membership-page-link",
+     "label": "Join the membership launch list",
+     "href": "https://www.utopiahomes.com/membership"
+    }
+   ],
+   "direct_answer": true,
+   "effective_from": "2026-09-12T00:00:00Z"
+  },
+  {
+   "id": "owners-management-model",
+   "service_line": "homes",
+   "kind": "description",
+   "title": "Utopia’s owner management model",
+   "approved_text": "Utopia combines vacation-rental management, distinctive marketing, local property oversight, guest communication, cleaning, maintenance, issue resolution, and thoughtful property improvements for Wildwood homeowners.",
+   "aliases": [
+    "manage my home",
+    "property management",
+    "list my home",
+    "owner services"
+   ],
+   "topics": [
+    "owners",
+    "management",
+    "design"
+   ],
+   "route": "owners",
+   "source": {
+    "id": "owners-page",
+    "label": "List your home",
+    "href": "https://www.utopiahomes.com/list-your-home"
+   },
+   "links": [
+    {
+     "id": "owners-page-link",
+     "label": "Explore owner services",
+     "href": "https://www.utopiahomes.com/list-your-home"
+    }
+   ],
+   "direct_answer": true,
+   "effective_from": "2026-09-12T00:00:00Z"
+  },
+  {
+   "id": "shamrock-accessibility",
+   "kind": "policy",
+   "title": "The Shamrock accessibility",
+   "approved_text": "The Shamrock: Please contact us before booking to discuss specific accessibility needs.",
+   "aliases": [
+    "wheelchair",
+    "stairs",
+    "mobility",
+    "accessible"
+   ],
+   "topics": [
+    "accessibility"
+   ],
+   "direct_answer": true,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "the-shamrock",
+   "property_facts": {
+    "max_guests": 32,
+    "parking_spaces": 8,
+    "has_pool": false,
+    "has_hot_tub": false,
+    "bedrooms": 10,
+    "bathrooms": 5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "shamrock-page",
+    "label": "The Shamrock",
+    "href": "https://www.utopiahomes.com/stays/the-shamrock"
+   },
+   "links": [
+    {
+     "id": "shamrock-page-link",
+     "label": "Explore The Shamrock",
+     "href": "https://www.utopiahomes.com/stays/the-shamrock"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "shamrock-amenities",
+   "kind": "fact",
+   "title": "The Shamrock amenities",
+   "approved_text": "The Shamrock amenities. Location: shared beach access, about two blocks from the boardwalk, and walkable to downtown Wildwood. At home: kitchen, Wi-Fi, dedicated workspace, HDTV, washer and in-unit dryer, and central air conditioning.",
+   "aliases": [
+    "swimming",
+    "outside",
+    "yard",
+    "spa",
+    "beach",
+    "wifi",
+    "kitchen",
+    "laundry"
+   ],
+   "topics": [
+    "amenities",
+    "pool",
+    "outdoors"
+   ],
+   "direct_answer": true,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "the-shamrock",
+   "property_facts": {
+    "max_guests": 32,
+    "parking_spaces": 8,
+    "has_pool": false,
+    "has_hot_tub": false,
+    "bedrooms": 10,
+    "bathrooms": 5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "shamrock-page",
+    "label": "The Shamrock",
+    "href": "https://www.utopiahomes.com/stays/the-shamrock"
+   },
+   "links": [
+    {
+     "id": "shamrock-page-link",
+     "label": "Explore The Shamrock",
+     "href": "https://www.utopiahomes.com/stays/the-shamrock"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "shamrock-capacity",
+   "kind": "fact",
+   "title": "The Shamrock capacity",
+   "approved_text": "The Shamrock welcomes up to 32 guests and has 10 bedrooms, 19 beds, and 5 bathrooms.",
+   "aliases": [
+    "Shamrock size",
+    "Shamrock sleeps",
+    "large group",
+    "people"
+   ],
+   "topics": [
+    "capacity",
+    "bedrooms",
+    "bathrooms"
+   ],
+   "direct_answer": true,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "the-shamrock",
+   "property_facts": {
+    "max_guests": 32,
+    "parking_spaces": 8,
+    "has_pool": false,
+    "has_hot_tub": false,
+    "bedrooms": 10,
+    "bathrooms": 5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "shamrock-page",
+    "label": "The Shamrock",
+    "href": "https://www.utopiahomes.com/stays/the-shamrock"
+   },
+   "links": [
+    {
+     "id": "shamrock-page-link",
+     "label": "Explore The Shamrock",
+     "href": "https://www.utopiahomes.com/stays/the-shamrock"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "shamrock-highlights",
+   "kind": "fact",
+   "title": "The Shamrock highlights",
+   "approved_text": "Highlights of The Shamrock: A restored piece of the historic Shamrock property; Ten bedrooms, four living rooms, and two decks; Garage and driveway parking for eight cars.",
+   "aliases": [
+    "what makes Shamrock special",
+    "features",
+    "square feet"
+   ],
+   "topics": [
+    "features",
+    "overview"
+   ],
+   "direct_answer": true,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "the-shamrock",
+   "property_facts": {
+    "max_guests": 32,
+    "parking_spaces": 8,
+    "has_pool": false,
+    "has_hot_tub": false,
+    "bedrooms": 10,
+    "bathrooms": 5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "shamrock-page",
+    "label": "The Shamrock",
+    "href": "https://www.utopiahomes.com/stays/the-shamrock"
+   },
+   "links": [
+    {
+     "id": "shamrock-page-link",
+     "label": "Explore The Shamrock",
+     "href": "https://www.utopiahomes.com/stays/the-shamrock"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "shamrock-overview",
+   "kind": "description",
+   "title": "About The Shamrock",
+   "approved_text": "Big groups deserve a home with just as much personality. The Shamrock brings everyone together in a restored piece of Wildwood history, with generous shared spaces and a location close to the beach, boardwalk, and downtown. The Shamrock is in Wildwood, New Jersey.",
+   "aliases": [
+    "Shamrock",
+    "Shamrock house",
+    "Wildwood house"
+   ],
+   "topics": [
+    "overview",
+    "location"
+   ],
+   "direct_answer": false,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "the-shamrock",
+   "property_facts": {
+    "max_guests": 32,
+    "parking_spaces": 8,
+    "has_pool": false,
+    "has_hot_tub": false,
+    "bedrooms": 10,
+    "bathrooms": 5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "shamrock-page",
+    "label": "The Shamrock",
+    "href": "https://www.utopiahomes.com/stays/the-shamrock"
+   },
+   "links": [
+    {
+     "id": "shamrock-page-link",
+     "label": "Explore The Shamrock",
+     "href": "https://www.utopiahomes.com/stays/the-shamrock"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "shamrock-parking",
+   "kind": "fact",
+   "title": "The Shamrock parking",
+   "approved_text": "The Shamrock has parking for 8 cars: 3 in the garage and 5 in the driveway, plus street parking.",
+   "aliases": [
+    "driveway",
+    "vehicles",
+    "automobiles",
+    "garage"
+   ],
+   "topics": [
+    "parking"
+   ],
+   "direct_answer": true,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "the-shamrock",
+   "property_facts": {
+    "max_guests": 32,
+    "parking_spaces": 8,
+    "has_pool": false,
+    "has_hot_tub": false,
+    "bedrooms": 10,
+    "bathrooms": 5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "shamrock-page",
+    "label": "The Shamrock",
+    "href": "https://www.utopiahomes.com/stays/the-shamrock"
+   },
+   "links": [
+    {
+     "id": "shamrock-page-link",
+     "label": "Explore The Shamrock",
+     "href": "https://www.utopiahomes.com/stays/the-shamrock"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  },
+  {
+   "id": "shamrock-pets",
+   "kind": "policy",
+   "title": "The Shamrock pet policy",
+   "approved_text": "The Shamrock: Dogs of all shapes and sizes are welcome, up to 4 dogs, with no pet fee. No cats.",
+   "aliases": [
+    "pet friendly",
+    "bring my dog",
+    "pups"
+   ],
+   "topics": [
+    "pets"
+   ],
+   "direct_answer": true,
+   "service_line": "homes",
+   "route": "property",
+   "property_slug": "the-shamrock",
+   "property_facts": {
+    "max_guests": 32,
+    "parking_spaces": 8,
+    "has_pool": false,
+    "has_hot_tub": false,
+    "bedrooms": 10,
+    "bathrooms": 5,
+    "pets_allowed": true
+   },
+   "source": {
+    "id": "shamrock-page",
+    "label": "The Shamrock",
+    "href": "https://www.utopiahomes.com/stays/the-shamrock"
+   },
+   "links": [
+    {
+     "id": "shamrock-page-link",
+     "label": "Explore The Shamrock",
+     "href": "https://www.utopiahomes.com/stays/the-shamrock"
+    }
+   ],
+   "effective_from": "2026-10-10T00:00:00Z"
+  }
+ ]
+}
