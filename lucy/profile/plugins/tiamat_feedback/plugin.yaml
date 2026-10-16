@@ -1,0 +1,7 @@
+name: tiamat_feedback
+version: 0.1.0
+description: Explicit feedback for Homes Dragon and Stoin, recorded through a dedicated Tiamat intake.
+author: Utopia Homes
+kind: standalone
+provides_tools:
+  - utopia_record_feedback
