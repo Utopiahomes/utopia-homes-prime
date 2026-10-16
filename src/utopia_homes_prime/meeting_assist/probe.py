@@ -16,12 +16,12 @@ import dataclasses
 import json
 import time
 import uuid
-from typing import Any
+from typing import Any, cast
 
 from fastapi.testclient import TestClient
 
 from utopia_homes_prime.business_api.api import create_app
-from utopia_homes_prime.config import Config, FallbackRouteConfig
+from utopia_homes_prime.config import Config, FallbackRouteConfig, HomesPrimeConfig
 from utopia_homes_prime.inference import direct_openrouter
 from utopia_homes_prime.meeting_assist.meeting import RespondRequest
 
@@ -78,7 +78,8 @@ def main() -> None:
     args = parser.parse_args()
     direct_openrouter.validate_instance = _shape_check  # type: ignore[attr-defined]
     config = Config.from_environment()
-    direct = config.homes_prime.direct
+    homes_prime = cast(HomesPrimeConfig, config.homes_prime)
+    direct = homes_prime.direct
     if direct is not None and (args.model or args.fallbacks is not None):
         if args.model:
             direct = dataclasses.replace(
@@ -105,7 +106,7 @@ def main() -> None:
                 ),
             )
         config = dataclasses.replace(
-            config, homes_prime=dataclasses.replace(config.homes_prime, direct=direct)
+            config, homes_prime=dataclasses.replace(homes_prime, direct=direct)
         )
         print("PROBE model", direct.model, "fallbacks", [r.model for r in direct.fallback_routes])
     app = create_app(config=config)
