@@ -52,6 +52,7 @@ provider_routing:
 plugins:
   enabled:
     - utopia_business
+    - tiamat_feedback
 
 auxiliary:
   compression:
