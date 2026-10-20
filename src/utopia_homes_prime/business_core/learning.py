@@ -295,8 +295,8 @@ class LearningDesk:
                 written.append(self._items.update(
                     target.id,
                     {"text": text, "evidence_ids": [*target.evidence_ids, source_ref][-50:],
-                     "source_note": f"updated by Lucy: {why}"[:500], "relation": "confirms"},
-                    changed_by="Lucy (learned automatically)", confirm=False,
+                     "source_note": f"updated by Lyra: {why}"[:500], "relation": "confirms"},
+                    changed_by="Lyra (learned automatically)", confirm=False,
                 ))  # fmt: skip
                 continue
             written.append(self._items.create(
@@ -313,7 +313,7 @@ class LearningDesk:
                     "source_note": why,
                     "relation": "new",
                 },
-                created_by="Lucy (learned automatically)",
+                created_by="Lyra (learned automatically)",
             ))  # fmt: skip
         if written and self.review_by_card and self.on_new_card is not None:
             self.on_new_card()
@@ -342,7 +342,7 @@ class LearningDesk:
                 "source_note": why,
                 "relation": "new",
             },
-            created_by="Lucy (learning)",
+            created_by="Lyra (learning)",
         )
         now = self._clock()
         card = LearningCard(

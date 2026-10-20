@@ -113,7 +113,7 @@ def card_text(turn: GuestTurn, home: str, waiting: list[GuestTurn], problem: str
     if problem:
         lines += [f"⚠️ {problem}", ""]
     if turn.escalation:
-        lines += [f"Lucy is handing this to you ({turn.escalation.get('category')}): "
+        lines += [f"Lyra is handing this to you ({turn.escalation.get('category')}): "
                   f"{turn.escalation.get('reason')}", ""]  # fmt: skip
     last = turn.attempts[-1] if turn.attempts else None
     version = len(turn.attempts)
@@ -129,7 +129,7 @@ def card_text(turn: GuestTurn, home: str, waiting: list[GuestTurn], problem: str
         if notes:
             lines += ["Check notes: " + "; ".join(notes), ""]
     if turn.proposed_work:
-        lines += [f"Lucy also suggested a work item ({', '.join(turn.proposed_work)}).", ""]
+        lines += [f"Lyra also suggested a work item ({', '.join(turn.proposed_work)}).", ""]
     sendable = last is not None and last.decision != "block" and not _PLACEHOLDER.search(last.text)
     if sendable:
         lines.append('Reply "send", your changes, or "reject".')

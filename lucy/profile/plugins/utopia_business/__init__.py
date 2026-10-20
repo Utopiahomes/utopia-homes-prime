@@ -107,7 +107,7 @@ _AUDIENCE = {
     "enum": ["public", "booked_guest", "internal"],
     "description": (
         "public: anyone, incl. website visitors. booked_guest: only guests with a booking "
-        "(e.g. trash day, checkout steps). internal: Ray, Meghan and Lucy only (e.g. breaker "
+        "(e.g. trash day, checkout steps). internal: Ray, Meghan and Lyra only (e.g. breaker "
         "location, vendors, business decisions)."
     ),
 }
@@ -117,7 +117,7 @@ SEARCH_KNOWLEDGE_SCHEMA = {
     "description": (
         "Search Utopia's knowledge items (everything beyond page facts: how things work, local "
         "tips, internal notes, business decisions, and proposed items awaiting review). The "
-        "query 'learned' finds what Lucy learned on her own from Ray's answers and finished work."
+        "query 'learned' finds what Lyra learned on her own from Ray's answers and finished work."
     ),
     "parameters": {
         "type": "object",
@@ -271,7 +271,7 @@ _TURN_ID = {"type": "string", "pattern": "^gt-[a-z0-9]{12}$"}
 GUEST_QUEUE_SCHEMA = {
     "name": "utopia_guest_queue",
     "description": (
-        "Show guest messages waiting on a person: drafts guest Lucy wrote (with the gate's "
+        "Show guest messages waiting on a person: drafts guest Lyra wrote (with the gate's "
         "verdict and notes) and conversations she handed over (with her reason)."
     ),
     "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
@@ -323,7 +323,7 @@ TRY_GUEST_SCHEMA = {
     "name": "utopia_try_guest_message",
     "description": (
         "TEST ONLY: send a pretend guest message for a home (a TEST reservation next week) so "
-        "Ray can see what guest Lucy drafts. The draft appears in utopia_guest_queue within a "
+        "Ray can see what guest Lyra drafts. The draft appears in utopia_guest_queue within a "
         "minute."
     ),
     "parameters": {
@@ -340,7 +340,7 @@ TRY_GUEST_SCHEMA = {
 
 
 def _operator() -> str:
-    return f"{os.environ.get('UTOPIA_LUCY_OPERATOR_NAME', 'operator')} via Utopia Lucy"
+    return f"{os.environ.get('UTOPIA_LUCY_OPERATOR_NAME', 'operator')} via Lyra"
 
 
 def _call(method: str, path: str, payload: dict[str, Any] | None = None) -> str:

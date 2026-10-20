@@ -94,7 +94,7 @@ def test_work_over_the_internal_api(client):
     headers = {"Authorization": f"Bearer {TOKEN}"}
     assert client.get("/internal/v1/work").status_code == 401
     created = client.post(
-        "/internal/v1/work", json={"item": POOL, "requested_by": "Ray via Utopia Lucy"},
+        "/internal/v1/work", json={"item": POOL, "requested_by": "Ray via Lyra"},
         headers=headers,
     )  # fmt: skip
     assert created.status_code == 201
@@ -103,7 +103,7 @@ def test_work_over_the_internal_api(client):
     updated = client.patch(
         f"/internal/v1/work/{work['id']}",
         json={"changes": {"status": "waiting"}, "note": "Pool company coming Tuesday",
-              "changed_by": "Ray via Utopia Lucy"},
+              "changed_by": "Ray via Lyra"},
         headers=headers,
     )  # fmt: skip
     assert updated.json()["work"]["notes"][0]["text"] == "Pool company coming Tuesday"

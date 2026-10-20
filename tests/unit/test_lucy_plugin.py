@@ -83,7 +83,7 @@ def test_an_update_is_attributed_to_the_operator(monkeypatch: pytest.MonkeyPatch
         "auth": "Bearer secret-token",
         "body": {
             "changes": {"parking": "Parking for 5 cars."},
-            "changed_by": "Ray via Utopia Lucy",
+            "changed_by": "Ray via Lyra",
             "reason": "Ray: garage",
         },
     }
@@ -129,7 +129,7 @@ def test_requests_for_work_become_work_items(monkeypatch: pytest.MonkeyPatch):
     )  # fmt: skip
     method, url, body = calls[0]
     assert (method, url) == ("POST", "http://core.test/internal/v1/work")
-    assert body["requested_by"] == "Ray via Utopia Lucy" and body["item"]["status"] == "open"
+    assert body["requested_by"] == "Ray via Lyra" and body["item"]["status"] == "open"
     assert body["item"]["property_slug"] == "buttercup-beauty"
     assert out["work"]["last_note"] == "called" and "purpose" not in out["work"]
 

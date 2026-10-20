@@ -670,7 +670,7 @@ def create_app(
 
         def wake_failed(turn_id: str) -> None:
             guest_desk.notify_hosts(
-                guest_desk.store.turn(turn_id), "Guest Lucy could not be reached to draft a reply."
+                guest_desk.store.turn(turn_id), "Guest Lyra could not be reached to draft a reply."
             )
 
         register_guest_routes(

@@ -45,8 +45,8 @@ _INTRO = re.compile(
 )
 # A name alone on the last line ("...Thank you!\n\nJordan !"). Over-scrubs a lone "Ok" at worst.
 _LAST_LINE_NAME = re.compile(r"(\n\s*)([A-Z][a-z'’-]{1,20})[ \t]*[!.]*\s*\Z")
-_HOST_NAMES = frozenset({"Meghan", "Meg", "Ray", "Raymond", "Utopia", "Lucy", "There", "All",
-                         "Everyone", "Again", "Guys", "Team"})  # fmt: skip
+_HOST_NAMES = frozenset({"Meghan", "Meg", "Ray", "Raymond", "Utopia", "Lucy", "Lyra", "There",
+                         "All", "Everyone", "Again", "Guys", "Team"})  # fmt: skip
 
 
 # Years in dates ("August 2024", "in 2023", "summer 2025") are not codes. They are hidden from the

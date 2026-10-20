@@ -447,8 +447,8 @@ class GuestDesk:
             line
             for line in (
                 f"Guest asked: {turn.guest_message}",
-                f"Lucy's draft: {first}" if first else "",
-                f"Lucy handed it to the hosts because: {turn.escalation['reason']}"
+                f"Lyra's draft: {first}" if first else "",
+                f"Lyra handed it to the hosts because: {turn.escalation['reason']}"
                 if turn.escalation
                 else "",
                 f"The host sent: {turn.decision.final_text}",
@@ -598,7 +598,7 @@ class GuestDesk:
                 "status": "proposed",
                 "input_refs": [f"reservation:{turn.reservation_id}", f"guest-turn:{turn.id}"],
             },
-            requested_by=f"guest Lucy (turn {turn.id})",
+            requested_by=f"guest Lyra (turn {turn.id})",
         )
         self._save(turn, proposed_work=[*turn.proposed_work, item.id])
         return item
