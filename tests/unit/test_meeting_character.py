@@ -56,7 +56,21 @@ def test_homes_meeting_policies_share_lyras_identity():
 
     assert DISPLAY_NAME == "Lyra"
     for policy in (RESPOND_POLICY, SEARCH_POLICY, DRAFT_POLICY):
-        assert policy.startswith("You are Lyra, the Utopia Homes assistant")
+        assert policy.startswith("You are Lyra, Utopia Homes' corporate dragon")
         assert "Clara" not in policy
     for policy in (RESPOND_POLICY, SEARCH_POLICY):
-        assert 'LYE-ruh' in policy
+        assert "LYE-ruh" in policy
+
+
+def test_lyra_calls_herself_a_corporate_dragon_and_never_claims_to_be_a_person():
+    """Ray, 2026-10-26: Lyra says "corporate dragon", never "AI"; asked sincerely, she still says
+    she is not a real person, with or without her character."""
+    from utopia_homes_prime.meeting_assist.meeting import RESPOND_POLICY
+
+    assert "corporate dragon" in RESPOND_POLICY
+    assert "Never call yourself an AI" in RESPOND_POLICY
+    assert "say plainly that you are not" in RESPOND_POLICY
+    assert "say plainly that you are an AI" not in RESPOND_POLICY + CHARACTER_POLICY
+    for persona in (None, BEACH):
+        system, _ = build_respond_messages(_request(persona=persona), ())
+        assert "You are not a person" in system.content
