@@ -70,7 +70,9 @@ def test_lyra_calls_herself_a_corporate_dragon_and_never_claims_to_be_a_person()
     assert "corporate dragon" in RESPOND_POLICY
     assert "Never call yourself an AI" in RESPOND_POLICY
     assert "say plainly that you are not" in RESPOND_POLICY
+    # Never a false denial: asked if she is an AI, she says yes, in her own words.
+    assert "never deny it: say yes, you're synthetic" in RESPOND_POLICY
     assert "say plainly that you are an AI" not in RESPOND_POLICY + CHARACTER_POLICY
     for persona in (None, BEACH):
         system, _ = build_respond_messages(_request(persona=persona), ())
-        assert "You are not a person" in system.content
+        assert "synthetic, not a person" in system.content
