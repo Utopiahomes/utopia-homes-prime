@@ -9,6 +9,15 @@
    "approved_by": "Ray",
    "approved_on": "2026-09-12",
    "note": "Approved R1 corpus, moved byte-exact from cloud-hermes-lucy ba461b7. Ray authorized it for real-provider testing on 2026-09-24. Serving it in production is part of the cutover approval (C8)."
+  },
+  {
+   "release_id": "homes-knowledge:r2",
+   "file": "knowledge/r2/utopia-public-knowledge.r2.json",
+   "canonical_digest": "7ad3022df10df1a79edbaca034427b5582e96a3a6eb8cbd750a60fb71d242a0b",
+   "file_sha256": "4897e073685883a69f4298b6af6c78c87af8c469f077d83b61daf7681bf21455",
+   "approved_by": "Ray",
+   "approved_on": "2026-10-31",
+   "note": "Proposed by tools/knowledge_sync.py from the website property feed; approved by merging its pull request."
   }
  ]
 }
