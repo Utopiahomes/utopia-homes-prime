@@ -292,9 +292,11 @@ def parse_request(body: object, model: type[_Strict]) -> Any:
             raise InvalidRequest()
         if sum(len(page.text) for page in parsed.documents) > DOCUMENTS_TOTAL_CHARS_MAX:
             raise InvalidRequest()
-    elif isinstance(parsed, DraftRequest):
-        if sum(len(line.text) for line in parsed.meeting_notes) > NOTES_TOTAL_CHARS_MAX:
-            raise InvalidRequest()
+    elif (
+        isinstance(parsed, DraftRequest)
+        and sum(len(line.text) for line in parsed.meeting_notes) > NOTES_TOTAL_CHARS_MAX
+    ):
+        raise InvalidRequest()
     return parsed
 
 
